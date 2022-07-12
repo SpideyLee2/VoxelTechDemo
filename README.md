@@ -10,3 +10,5 @@ This is a small project I'm working on to hone my OpenGL and C++ skills. It is a
 4. Add biome generation
 5. Implement Perlin Worms for cave generation
 6. Beautification (lighting, water shader, skybox, etc.)
+
+The nightly branch is being used solely as a backup for my local branch and may not be stable. If you want to view the stable version, make sure to clone the main branch.
