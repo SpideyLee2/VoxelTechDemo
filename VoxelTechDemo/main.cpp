@@ -36,6 +36,8 @@ bool flashlightIsActive = false;
 
 const glm::mat4 IDENTITY{ 1.0f };
 
+const int TEX_ARR_UNIT = 1;
+
 glm::mat4 view;
 glm::mat4 projection;
 
@@ -88,6 +90,71 @@ int main() {
 
 	#pragma region Shaders
 	Shader basicShader{ "shaders/basic.vert", "shaders/basic.frag" };
+	#pragma endregion
+
+	#pragma region Textures
+	Texture2D grassTopTex{ "textures/grass/Block_Grass_Top.png", true };
+	Texture2D grassSideTex{ "textures/grass/Block_Grass_Side.png", true };
+	Texture2D dirtTex{ "textures/dirt/Block_Dirt.png", true };
+	Texture2D stoneTex{ "textures/stone/Block_Stone.png", true };
+	Texture2D sandTex{ "textures/sand/Block_Sand.png", true };
+	Texture2D waterTex{ "textures/water/Block_Water.png", true };
+	Texture2D fullSpecular{ "textures/Full_Specular.png" };
+	Texture2D noSpecular{ "textures/No_Specular.png" };
+	#pragma endregion
+
+	const int NUM_TEXTURES = 6;
+	std::pair<std::string, bool> dirs[NUM_TEXTURES] = {
+		{ "textures/grass/Block_Grass_Top.png", true },
+		{ "textures/grass/Block_Grass_Side.png", true },
+		{ "textures/dirt/Block_Dirt.png", true },
+		{ "textures/stone/Block_Stone.png", true },
+		{ "textures/sand/Block_Sand.png", true },
+		{ "textures/water/Block_Water.png", true },
+		//{ "textures/Full_Specular.png", false },
+		//{ "textures/No_Specular.png", false }
+	};
+
+	// Constructs array texture
+	#pragma region Array_Texture
+	unsigned int arrTex;
+	glGenTextures(1, &arrTex);
+	glActiveTexture(GL_TEXTURE0 + TEX_ARR_UNIT);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, arrTex);
+
+	const int TEX_ARR_WIDTH = 16; // # pixels
+	const int TEX_ARR_HEIGHT = 16; // # pixels
+	const int TEX_ARR_DEPTH = 16; // # textures
+	const int TEX_ARR_WIDTH_BYTES = TEX_ARR_WIDTH * sizeof(GLubyte);
+	const int TEX_ARR_HEIGHT_BYTES = TEX_ARR_HEIGHT * sizeof(GLubyte);
+
+	int texWidth, texHeight, texNumChannels;
+	std::vector<GLubyte> pixelData = std::vector<GLubyte>();
+	for (int i = 0; i < NUM_TEXTURES; ++i) {
+		unsigned char* texData = stbi_load(dirs[i].first.c_str(), &texWidth, &texHeight, &texNumChannels, 0);
+		int numPixels = texWidth * texHeight;
+		for (int y = 0; y < texHeight; ++y) {
+			for (int x = 0; x < texWidth; ++x) {
+				pixelData.push_back(texData[x + (y * TEX_ARR_WIDTH)]);
+			}
+		}
+		stbi_image_free(texData);
+	}
+
+	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, TEX_ARR_WIDTH_BYTES, TEX_ARR_HEIGHT_BYTES, TEX_ARR_DEPTH, 
+				 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+
+	glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	pixelData.clear();
+
+	glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+	glActiveTexture(GL_TEXTURE0);
 	#pragma endregion
 
 	stbi_set_flip_vertically_on_load(true);
@@ -274,13 +341,16 @@ int main() {
 		glm::mat4 projection = glm::perspective(glm::radians(camera.fov), (float)screenWidth / (float)screenHeight, 0.1f, 2000.0f);
 
 		#pragma region Terrain_Drawing
+		glActiveTexture(GL_TEXTURE0 + TEX_ARR_UNIT);
+		glBindTexture(GL_TEXTURE_2D_ARRAY, arrTex);
 		// Shader Uniforms
 		glUniformMatrix4fv(glGetUniformLocation(basicShader.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(glGetUniformLocation(basicShader.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniform1i(glGetUniformLocation(basicShader.id, "arrTex"), TEX_ARR_UNIT);
 		
 		//std::cout << "Rendering chunks..." << std::endl;
-		for (const Chunk& c : chunks) {
-			c.render(basicShader);
+		for (Chunk& c : chunks) {
+			c.render(basicShader, false);
 		}
 		//std::cout << "Finished rendering chunks." << std::endl;
 		#pragma endregion

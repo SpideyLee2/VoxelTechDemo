@@ -4,7 +4,7 @@
 
 class VAO {
 public:
-	VAO(const float* data, const int& size);
+	VAO();
 	~VAO();
 
 	void bind() const;

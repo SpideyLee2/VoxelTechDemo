@@ -19,7 +19,7 @@ const int CUBE_OFFSET = 10;
 
 static std::unique_ptr<FastNoiseLite> noise;
 
-static std::unordered_map<TEXTURE_TYPE, const std::shared_ptr<Texture2D>>* blockTextures;
+//static std::unordered_map<TEXTURE_TYPE, const std::shared_ptr<Texture2D>>* blockTextures;
 
 /*
 const static int8_t X_DIMENSION = 16;
@@ -32,7 +32,7 @@ const static int8_t MAX_Y = 127;
 const int8_t CUBE_OFFSET = 10;
 */
 
-static int s_chunkID = 0;
+static int s_ChunkIDCounter = 0;
 
 class Chunk {
 public:
@@ -41,13 +41,19 @@ public:
 	Chunk(Chunk&& chunk) = default;
 
 	Block& getBlockAt(glm::ivec3 blockPosInChunk) const;
-	void render(const Shader& shader) const;
+	void render(const Shader& shader, const bool& cameraHasMoved);
+	int updateVisibleFacesMesh();
 
-	glm::vec2 m_worldPos;
+	unsigned int m_Vao;
+	unsigned int m_Vbo;
+	glm::vec2 m_WorldPos;
 	std::unique_ptr<Block[]> m_pBlocks;
 private:
+	void populateVBO();
 	void generate();
-	
+
 	const int m_ID;
+	int numVisFaces;
+	std::vector<Vertex> m_VisVerts;
 };
 
