@@ -14,41 +14,6 @@ Block::Block(const BLOCK_TYPE& blockType, const TEXTURE_TYPE& texType, const glm
 	//m_AdjBlocks = std::array<BLOCK_TYPE, 6>();
 }
 
-Block::Block(const Block& block) 
-	: m_Model(block.m_Model), 
-	  m_BlockType(block.m_BlockType),
-	  m_ChunkID(block.m_ChunkID),
-	  m_ChunkPos(block.m_ChunkPos),
-	  m_WorldPos(block.m_WorldPos), 
-	  m_TexType(block.m_TexType),
-	  m_IsSolid(block.m_IsSolid)/*, m_AdjBlocks(block.m_AdjBlocks)*/ {
-}
-
-Block::Block(Block&& block) noexcept
-	: m_Model(std::move(block.m_Model)),
-	  m_BlockType(std::move(block.m_BlockType)),
-	  m_ChunkID(std::move(block.m_ChunkID)),
-	  m_ChunkPos(std::move(block.m_ChunkPos)),
-	  m_WorldPos(std::move(block.m_WorldPos)),
-	  m_TexType(std::move(block.m_TexType)),
-	  m_IsSolid(std::move(block.m_IsSolid))/*, m_AdjBlocks(std::move(block.m_AdjBlocks))*/ {
-}
-
-Block& Block::operator=(Block&& block) noexcept {
-	if (this != &block) {
-		m_Model = std::move(block.m_Model);
-		m_BlockType = std::move(block.m_BlockType);
-		m_ChunkID = std::move(block.m_ChunkID);
-		m_ChunkPos = std::move(block.m_ChunkPos);
-		m_WorldPos = std::move(block.m_WorldPos);
-		m_TexType = std::move(block.m_TexType);
-		m_IsSolid = std::move(block.m_IsSolid);
-		//m_AdjBlocks = std::move(block.m_AdjBlocks);
-	}
-
-	return *this;
-}
-
 BLOCK_TYPE Block::getBlockType() const {
 	return m_BlockType;
 }
@@ -72,3 +37,38 @@ glm::vec3 Block::getWorldPos() const {
 //void Block::setAdjBlockType(const BLOCK_TYPE blockType, int pos) {
 //	m_AdjBlocks[pos] = blockType;
 //}
+
+Block::Block(const Block& block) : 
+	m_Model(block.m_Model),
+	m_BlockType(block.m_BlockType),
+	m_ChunkID(block.m_ChunkID),
+	m_ChunkPos(block.m_ChunkPos),
+	m_WorldPos(block.m_WorldPos),
+	m_TexType(block.m_TexType),
+	m_IsSolid(block.m_IsSolid)/*, m_AdjBlocks(block.m_AdjBlocks)*/ {
+}
+
+Block::Block(Block&& block) noexcept : 
+	m_Model(std::move(block.m_Model)),
+	m_BlockType(std::move(block.m_BlockType)),
+	m_ChunkID(std::move(block.m_ChunkID)),
+	m_ChunkPos(std::move(block.m_ChunkPos)),
+	m_WorldPos(std::move(block.m_WorldPos)),
+	m_TexType(std::move(block.m_TexType)),
+	m_IsSolid(std::move(block.m_IsSolid))/*, m_AdjBlocks(std::move(block.m_AdjBlocks))*/ {
+}
+
+Block& Block::operator=(Block&& block) noexcept {
+	if (this != &block) {
+		m_Model = std::move(block.m_Model);
+		m_BlockType = std::move(block.m_BlockType);
+		m_ChunkID = std::move(block.m_ChunkID);
+		m_ChunkPos = std::move(block.m_ChunkPos);
+		m_WorldPos = std::move(block.m_WorldPos);
+		m_TexType = std::move(block.m_TexType);
+		m_IsSolid = std::move(block.m_IsSolid);
+		//m_AdjBlocks = std::move(block.m_AdjBlocks);
+	}
+
+	return *this;
+}

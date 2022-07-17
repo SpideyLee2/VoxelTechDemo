@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <future>
+#include <chrono>
 
 #include "Shader.h"
 #include "Texture2D.h"
@@ -15,7 +17,7 @@
 #include "Chunk.h"
 
 #pragma region Function_Declarations
-void drawTerrain(Shader shader, unsigned int vao);
+void loadChunks(std::vector<Chunk>& chunks, const int renderDistance);
 void processInput(GLFWwindow* window);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void mousePosCallback(GLFWwindow* window, double xPos, double yPos);
@@ -54,8 +56,10 @@ GLfloat screenQuadVertices[] = {
 
 Camera camera{ glm::vec3(0.0f, 150.0f, 3.0f) };
 
+std::vector<std::future<void>> futures;
+std::mutex chunksMutex;
+
 int main() {
-	std::cout << "Help me" << std::endl;
 	#pragma region GFLW_Window_Setup
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -93,24 +97,26 @@ int main() {
 	#pragma endregion
 
 	#pragma region Textures
-	Texture2D grassTopTex{ "textures/grass/Block_Grass_Top.png", true };
-	Texture2D grassSideTex{ "textures/grass/Block_Grass_Side.png", true };
-	Texture2D dirtTex{ "textures/dirt/Block_Dirt.png", true };
-	Texture2D stoneTex{ "textures/stone/Block_Stone.png", true };
-	Texture2D sandTex{ "textures/sand/Block_Sand.png", true };
-	Texture2D waterTex{ "textures/water/Block_Water.png", true };
-	Texture2D fullSpecular{ "textures/Full_Specular.png" };
-	Texture2D noSpecular{ "textures/No_Specular.png" };
+	//Texture2D grassTopTex{ "textures/grass/Block_Grass_Top.png", true };
+	//Texture2D grassSideTex{ "textures/grass/Block_Grass_Side.png", true };
+	//Texture2D dirtTex{ "textures/dirt/Block_Dirt.png", true };
+	//Texture2D stoneTex{ "textures/stone/Block_Stone.png", true };
+	//Texture2D sandTex{ "textures/sand/Block_Sand.png", true };
+	//Texture2D waterTex{ "textures/water/Block_Water.png", true };
+	//Texture2D fullSpecular{ "textures/Full_Specular.png" };
+	//Texture2D noSpecular{ "textures/No_Specular.png" };
 	#pragma endregion
 
+	stbi_set_flip_vertically_on_load(true);
+
 	const int NUM_TEXTURES = 6;
-	std::pair<std::string, bool> dirs[NUM_TEXTURES] = {
-		{ "textures/grass/Block_Grass_Top.png", true },
-		{ "textures/grass/Block_Grass_Side.png", true },
-		{ "textures/dirt/Block_Dirt.png", true },
-		{ "textures/stone/Block_Stone.png", true },
-		{ "textures/sand/Block_Sand.png", true },
-		{ "textures/water/Block_Water.png", true },
+	std::string texDirs[NUM_TEXTURES] = {
+		{ "textures/grass/Block_Grass_Top.png" },
+		{ "textures/grass/Block_Grass_Side.png" },
+		{ "textures/dirt/Block_Dirt.png" },
+		{ "textures/stone/Block_Stone.png" },
+		{ "textures/sand/Block_Sand.png" },
+		{ "textures/water/Block_Water.png" },
 		//{ "textures/Full_Specular.png", false },
 		//{ "textures/No_Specular.png", false }
 	};
@@ -125,31 +131,38 @@ int main() {
 	const int TEX_ARR_WIDTH = 16; // # pixels
 	const int TEX_ARR_HEIGHT = 16; // # pixels
 	const int TEX_ARR_DEPTH = 16; // # textures
-	const int TEX_ARR_WIDTH_BYTES = TEX_ARR_WIDTH * sizeof(GLubyte);
-	const int TEX_ARR_HEIGHT_BYTES = TEX_ARR_HEIGHT * sizeof(GLubyte);
+	const int TEX_ARR_WIDTH_BYTES = TEX_ARR_WIDTH * sizeof(unsigned char);
+	const int TEX_ARR_HEIGHT_BYTES = TEX_ARR_HEIGHT * sizeof(unsigned char);
 
 	int texWidth, texHeight, texNumChannels;
-	std::vector<GLubyte> pixelData = std::vector<GLubyte>();
+	std::vector<unsigned char> pixelData = std::vector<unsigned char>();
+	// Populates the pixel data vector for creating a 2D array texture
 	for (int i = 0; i < NUM_TEXTURES; ++i) {
-		unsigned char* texData = stbi_load(dirs[i].first.c_str(), &texWidth, &texHeight, &texNumChannels, 0);
-		int numPixels = texWidth * texHeight;
-		for (int y = 0; y < texHeight; ++y) {
-			for (int x = 0; x < texWidth; ++x) {
-				pixelData.push_back(texData[x + (y * TEX_ARR_WIDTH)]);
+		unsigned char* texData = stbi_load(texDirs[i].c_str(), &texWidth, &texHeight, &texNumChannels, 0);
+		if (texData) {
+			for (int channel = 0; channel < texNumChannels; ++channel) {
+				for (int y = 0; y < texHeight; ++y) {
+					for (int x = 0; x < texWidth; ++x) {
+						pixelData.emplace_back(std::move(texData[x + (y * TEX_ARR_WIDTH) + (channel * TEX_ARR_WIDTH * TEX_ARR_HEIGHT)]));
+					}
+				}
 			}
+			stbi_image_free(texData);
 		}
-		stbi_image_free(texData);
+		else {
+			std::cout << "Could not load texture data\n";
+		}
 	}
 
-	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, TEX_ARR_WIDTH_BYTES, TEX_ARR_HEIGHT_BYTES, TEX_ARR_DEPTH, 
+	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, 16, 16, TEX_ARR_DEPTH,
 				 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
 
 	glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	pixelData.clear();
 
@@ -157,7 +170,32 @@ int main() {
 	glActiveTexture(GL_TEXTURE0);
 	#pragma endregion
 
-	stbi_set_flip_vertically_on_load(true);
+	std::chrono::steady_clock time;
+
+	std::cout << "Generating chunks..." << std::endl;
+	const int RENDER_DIST = 32;
+	
+	std::vector<Chunk> chunks = std::vector<Chunk>();
+	auto startTime = time.now();
+	loadChunks(chunks, RENDER_DIST);
+	auto endTime = time.now();
+	auto elapsedChunkLoadTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+	std::cout << "Time to load " << chunks.size() << " chunks: " << elapsedChunkLoadTime << "ms\n";
+	float timePerChunk = elapsedChunkLoadTime / (float)(chunks.size());
+	std::cout << (timePerChunk < 6.0f ? std::to_string(timePerChunk) + "ms per chunk (GOOD)\n" : 
+										std::to_string(timePerChunk) + "ms per chunk (BAD)\n");
+
+	for (Chunk& c : chunks) {
+		c.generateVAOandVBO();
+		//c.updateVisibleFacesMesh();
+		c.populateVBO();
+	}
+	endTime = time.now();
+	elapsedChunkLoadTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+	std::cout << "Time to load " << chunks.size() << " chunks AND populate the VBO: " << elapsedChunkLoadTime << "ms\n";
+	timePerChunk = elapsedChunkLoadTime / (float)(chunks.size());
+	std::cout << (timePerChunk < 6.0f ? std::to_string(timePerChunk) + "ms per chunk (GOOD)\n" :
+										std::to_string(timePerChunk) + "ms per chunk (BAD)\n");
 
 	float lastFrame = 0.0f;
 	float currFrame = 0.0f;
@@ -312,20 +350,6 @@ int main() {
 	}
 	*/
 
-	std::cout << "Generating chunk..." << std::endl;
-	// Uncomment these to render additional chunks (WARNING: Not optimized for this (yet)).
-	Chunk chunks[] = {
-		{glm::vec2{0.0f, 0.0f}},
-		//{glm::vec2{-16.0f, 0.0f}},
-		//{glm::vec2{0.0f, 16.0f}},
-		//{glm::vec2{0.0f, -16.0f}},
-		//{glm::vec2{16.0f, 16.0f}},
-		//{glm::vec2{-16.0f, -16.0f}},
-		//{glm::vec2{-16.0f, 16.0f}},
-		//{glm::vec2{16.0f, -16.0f}}
-	};
-	std::cout << "Finished generating chunk." << std::endl;
-
 	// NEW Render Loop
 	while (!glfwWindowShouldClose(window)) {
 		currFrame = static_cast<float>(glfwGetTime());
@@ -366,74 +390,31 @@ int main() {
 	return 0;
 }
 
-void drawTerrain(Shader shader, unsigned int vao, Texture2D diffuseMap, Texture2D specularMap) {
-	/*
-	shader.use();
+void pushChunk(std::vector<Chunk>& chunks, const int& x, const int& y) {
+	//std::cout << "Vector capacity: " << chunks.capacity() << std::endl;
+	Chunk chunk{ glm::ivec2(16 * x, 16 * y) };
+	std::lock_guard<std::mutex> lock(chunksMutex);
+	chunks.emplace_back(std::move(chunk));
+}
 
-	diffuseMap.bind(0);
-	specularMap.bind(1);
-
-	#pragma region Shader_Uniforms
-	glUniformMatrix4fv(glGetUniformLocation(shader.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(shader.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-	glUniform3fv(glGetUniformLocation(shader.id, "viewPos"), 1, glm::value_ptr(camera.cameraPosition));
-
-	glUniform1i(glGetUniformLocation(shader.id, "material.diffuse"), 0);
-	glUniform1i(glGetUniformLocation(shader.id, "material.specular"), 1);
-	glUniform1f(glGetUniformLocation(shader.id, "material.shininess"), 8.0f);
-
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].direction"), 1, glm::value_ptr(sunPos));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].ambient"), 1, glm::value_ptr(glm::vec3(0.2f) * sunLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].diffuse"), 1, glm::value_ptr(glm::vec3(0.5f) * sunLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].specular"), 1, glm::value_ptr(glm::vec3(0.05f) * sunLightColor));
-
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].direction"), 1, glm::value_ptr(moonPos));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].ambient"), 1, glm::value_ptr(glm::vec3(0.2f) * moonLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].diffuse"), 1, glm::value_ptr(glm::vec3(1.0f) * moonLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].specular"), 1, glm::value_ptr(glm::vec3(0.03f) * moonLightColor));
-
-	for (int i = 0; i < 4; ++i) {
-		std::string index = std::to_string(i);
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].position").c_str()), 1,
-					 glm::value_ptr(lightPositions[i]));
-		glUniform1f(glGetUniformLocation(shader.id, ("pointLight[" + index + "].constant").c_str()), 1.0f);
-		glUniform1f(glGetUniformLocation(shader.id, ("pointLight[" + index + "].linear").c_str()), 0.14f);
-		glUniform1f(glGetUniformLocation(shader.id, ("pointLight[" + index + "].quadratic").c_str()), 0.07f);
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].ambient").c_str()), 1,
-					 glm::value_ptr(glm::vec3(0.03f)));
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].diffuse").c_str()), 1,
-					 glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].specular").c_str()), 1,
-					 glm::value_ptr(glm::vec3(0.05f)));
+void loadChunks(std::vector<Chunk>& chunks, const int renderDistance) {
+	for (int y = -renderDistance/2; y < renderDistance/2; ++y) {
+		for (int x = -renderDistance/2; x < renderDistance/2; ++x) {
+			//pushChunk(chunks, x, y);
+			futures.push_back(std::async(std::launch::async, pushChunk, std::ref(chunks), x, y));
+		}
 	}
-
-	glUniform1i(glGetUniformLocation(shader.id, "spotLight.isActive"), flashlightIsActive);
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.position"), 1, glm::value_ptr(camera.cameraPosition));
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.direction"), 1, glm::value_ptr(camera.cameraFront));
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.innerCutoff"), glm::cos(glm::radians(12.5f)));
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.outerCutoff"), glm::cos(glm::radians(17.5f)));
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.constant"), 1.0f);
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.linear"), 0.07f);
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.quadratic"), 0.017f);
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.ambient"), 1, glm::value_ptr(glm::vec3(0.1f)));
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.diffuse"), 1, glm::value_ptr(glm::vec3(0.5f)));
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.specular"), 1, glm::value_ptr(glm::vec3(0.05f)));
-	#pragma endregion
-
-	glBindVertexArray(vao);
-	//int noiseInd = 0;
-	//for (int i = 0; i < NUM_CUBES_X; ++i) {
-	//	for (int j = 0; j < NUM_CUBES_Z; ++j) {
-	//		glm::mat4 model = glm::mat4(1.0f);
-	//		model = glm::translate(model, glm::vec3(i, (int)(noiseData[noiseInd++] * 10), -j));
-	//		glUniformMatrix4fv(glGetUniformLocation(objShader.id, "model"), 1, GL_FALSE, glm::value_ptr(model));
-	//		glDrawArrays(GL_TRIANGLES, 0, 36);
+	//for (int y = 0; y < renderDistance; ++y) {
+	//	for (int x = 0; x < renderDistance; ++x) {
+	//		//pushChunk(chunks, x, y);
+	//		futures.push_back(std::async(std::launch::async, pushChunk, std::ref(chunks), x, y));
 	//	}
 	//}
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 36, TOTAL_NUM_CUBES);
-	*/
+	for (std::future<void>& future : futures) {
+		future.get();
+	}
 }
+
 
 void processInput(GLFWwindow* window) {
 	// Close window
@@ -445,7 +426,7 @@ void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS) {
 		glfwSetWindowMonitor(window, glfwGetPrimaryMonitor(), 0, 0, 2160, 1440, 144);
 	}
-	// Fullscreen
+	// Windowed
 	if (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS) {
 		glfwSetWindowMonitor(window, NULL, 0, 0, 800, 600, 144);
 	}

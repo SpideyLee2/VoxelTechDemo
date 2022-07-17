@@ -5,17 +5,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <FastNoiseLite/FastNoiseLite.h>
 
+#include <future>
+
 #include "Block.h"
 #include "Shader.h"
-
-const static int X_DIMENSION = 16;
-const static int Y_DIMENSION = 256;
-const static int Z_DIMENSION = 16;
-const static int VOLUME = X_DIMENSION * Y_DIMENSION * Z_DIMENSION;
-const static int MIN_Y = 0;
-const static int MAX_Y = 255;
-
-const int CUBE_OFFSET = 10;
 
 static std::unique_ptr<FastNoiseLite> noise;
 
@@ -37,23 +30,37 @@ static int s_ChunkIDCounter = 0;
 class Chunk {
 public:
 	Chunk(glm::vec2&& worldPos);
-	Chunk(const Chunk& chunk) = default;
-	Chunk(Chunk&& chunk) = default;
+	Chunk(const Chunk& chunk) = delete;
+	Chunk(Chunk&& chunk) noexcept;
+	Chunk() = default;
 
-	Block& getBlockAt(glm::ivec3 blockPosInChunk) const;
+	Chunk& operator=(const Chunk& chunk) = delete;
+	Chunk& operator=(Chunk&& chunk) noexcept;
+
+	Block& getBlockAt(const glm::ivec3& blockPosInChunk) const;
 	void render(const Shader& shader, const bool& cameraHasMoved);
-	int updateVisibleFacesMesh();
+	void generateVAOandVBO();
+	void updateVisibleFacesMesh();
+	void populateVBO();
 
 	unsigned int m_Vao;
 	unsigned int m_Vbo;
 	glm::vec2 m_WorldPos;
 	std::unique_ptr<Block[]> m_pBlocks;
-private:
-	void populateVBO();
-	void generate();
 
-	const int m_ID;
-	int numVisFaces;
+	const static int X_DIMENSION = 16;
+	const static int Y_DIMENSION = 256;
+	const static int Z_DIMENSION = 16;
+	const static int VOLUME = X_DIMENSION * Y_DIMENSION * Z_DIMENSION;
+	const static int MIN_Y = 0;
+	const static int MAX_Y = 255;
+	const static int CUBE_OFFSET = 10;
+private:
+	void generate();
+	void updateVFM(const int& x, const int& y, const int& z);
+
+	int m_ID;
+	int m_NumVisFaces;
 	std::vector<Vertex> m_VisVerts;
 };
 

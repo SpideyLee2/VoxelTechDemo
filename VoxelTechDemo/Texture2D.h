@@ -17,7 +17,6 @@ enum class TEXTURE_TYPE {
 	Stone,
 	Sand,
 	Water,
-	Air,
 	FullSpecular,
 	NoSpecular
 };
