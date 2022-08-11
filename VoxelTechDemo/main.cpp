@@ -14,10 +14,11 @@
 #include "Shader.h"
 #include "Texture2D.h"
 #include "Camera.h"
-#include "Chunk.h"
+//#include "Chunk.h"
+#include "ChunkManager.h"
 
 #pragma region Function_Declarations
-void loadChunks(std::vector<Chunk>& chunks, const int renderDistance);
+//void loadChunks(std::vector<Chunk>& chunks, const int renderDistance);
 void processInput(GLFWwindow* window);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void mousePosCallback(GLFWwindow* window, double xPos, double yPos);
@@ -54,10 +55,53 @@ GLfloat screenQuadVertices[] = {
 	-1.0,  1.0,		 0.0,  1.0
 };
 
-Camera camera{ glm::vec3(0.0f, 150.0f, 3.0f) };
+float cubeVertices[] = {
+	// Positions           // Normals      // Tex Coords
+	// Back face
+	-1.0f, -1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 0.0f, 0.0f, // bottom-left
+	 1.0f,  1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 1.0f, 1.0f, // top-right
+	 1.0f, -1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 1.0f, 0.0f, // bottom-right         
+	 1.0f,  1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 1.0f, 1.0f, // top-right
+	-1.0f, -1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 0.0f, 0.0f, // bottom-left
+	-1.0f,  1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 0.0f, 1.0f, // top-left
+	// Front face		  				  
+	-1.0f, -1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 0.0f, 0.0f, // bottom-left
+	 1.0f, -1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 1.0f, 0.0f, // bottom-right
+	 1.0f,  1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 1.0f, 1.0f, // top-right
+	 1.0f,  1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 1.0f, 1.0f, // top-right
+	-1.0f,  1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 0.0f, 1.0f, // top-left
+	-1.0f, -1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 0.0f, 0.0f, // bottom-left
+	// Left face		  				  
+	-1.0f,  1.0f,  1.0f,   -1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-right
+	-1.0f,  1.0f, -1.0f,   -1.0f,  0.0f,    0.0f, 1.0f, 1.0f, // top-left
+	-1.0f, -1.0f, -1.0f,   -1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-left
+	-1.0f, -1.0f, -1.0f,   -1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-left
+	-1.0f, -1.0f,  1.0f,   -1.0f,  0.0f,    0.0f, 0.0f, 0.0f, // bottom-right
+	-1.0f,  1.0f,  1.0f,   -1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-right
+	// Right face		  				  
+	 1.0f,  1.0f,  1.0f,    1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-left
+	 1.0f, -1.0f, -1.0f,    1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-right
+	 1.0f,  1.0f, -1.0f,    1.0f,  0.0f,    0.0f, 1.0f, 1.0f, // top-right         
+	 1.0f, -1.0f, -1.0f,    1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-right
+	 1.0f,  1.0f,  1.0f,    1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-left
+	 1.0f, -1.0f,  1.0f,    1.0f,  0.0f,    0.0f, 0.0f, 0.0f, // bottom-left     
+	// Bottom face		  				  
+	-1.0f, -1.0f, -1.0f,    0.0f, -1.0f,    0.0f, 0.0f, 1.0f, // top-right
+	 1.0f, -1.0f, -1.0f,    0.0f, -1.0f,    0.0f, 1.0f, 1.0f, // top-left
+	 1.0f, -1.0f,  1.0f,    0.0f, -1.0f,    0.0f, 1.0f, 0.0f, // bottom-left
+	 1.0f, -1.0f,  1.0f,    0.0f, -1.0f,    0.0f, 1.0f, 0.0f, // bottom-left
+	-1.0f, -1.0f,  1.0f,    0.0f, -1.0f,    0.0f, 0.0f, 0.0f, // bottom-right
+	-1.0f, -1.0f, -1.0f,    0.0f, -1.0f,    0.0f, 0.0f, 1.0f, // top-right
+	// Top face			  				  
+	-1.0f,  1.0f, -1.0f,    0.0f,  1.0f,    0.0f, 0.0f, 1.0f, // top-left
+	 1.0f,  1.0f , 1.0f,    0.0f,  1.0f,    0.0f, 1.0f, 0.0f, // bottom-right
+	 1.0f,  1.0f, -1.0f,    0.0f,  1.0f,    0.0f, 1.0f, 1.0f, // top-right     
+	 1.0f,  1.0f,  1.0f,    0.0f,  1.0f,    0.0f, 1.0f, 0.0f, // bottom-right
+	-1.0f,  1.0f, -1.0f,    0.0f,  1.0f,    0.0f, 0.0f, 1.0f, // top-left
+	-1.0f,  1.0f,  1.0f,    0.0f,  1.0f,    0.0f, 0.0f, 0.0f  // bottom-left        
+};
 
-std::vector<std::future<void>> futures;
-std::mutex chunksMutex;
+Camera camera{ glm::vec3(0.0f, 150.0f, 3.0f) };
 
 int main() {
 	#pragma region GFLW_Window_Setup
@@ -94,6 +138,7 @@ int main() {
 
 	#pragma region Shaders
 	Shader basicShader{ "shaders/basic.vert", "shaders/basic.frag" };
+	Shader debugChunkShader{ "shaders/debug_chunk.vert", "shaders/debug_chunk.frag" };
 	#pragma endregion
 
 	#pragma region Textures
@@ -108,6 +153,26 @@ int main() {
 	#pragma endregion
 
 	stbi_set_flip_vertically_on_load(true);
+
+	unsigned int cubeVAO;
+	glGenVertexArrays(1, &cubeVAO);
+	glBindVertexArray(cubeVAO);
+	
+	unsigned int cubeVBO;
+	glGenBuffers(1, &cubeVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), &cubeVertices, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 5));
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 
 	const int NUM_TEXTURES = 6;
 	std::string texDirs[NUM_TEXTURES] = {
@@ -170,10 +235,11 @@ int main() {
 	glActiveTexture(GL_TEXTURE0);
 	#pragma endregion
 
+	/*
 	std::chrono::steady_clock time;
 
 	std::cout << "Generating chunks..." << std::endl;
-	const int RENDER_DIST = 32;
+	const int RENDER_DIST = 16;
 	
 	std::vector<Chunk> chunks = std::vector<Chunk>();
 	auto startTime = time.now();
@@ -184,11 +250,12 @@ int main() {
 	float timePerChunk = elapsedChunkLoadTime / (float)(chunks.size());
 	std::cout << (timePerChunk < 6.0f ? std::to_string(timePerChunk) + "ms per chunk (GOOD)\n" : 
 										std::to_string(timePerChunk) + "ms per chunk (BAD)\n");
-
+	int countFaces = 0;
 	for (Chunk& c : chunks) {
 		c.generateVAOandVBO();
 		//c.updateVisibleFacesMesh();
 		c.populateVBO();
+		countFaces += c.m_NumVisFaces;
 	}
 	endTime = time.now();
 	elapsedChunkLoadTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
@@ -196,9 +263,14 @@ int main() {
 	timePerChunk = elapsedChunkLoadTime / (float)(chunks.size());
 	std::cout << (timePerChunk < 6.0f ? std::to_string(timePerChunk) + "ms per chunk (GOOD)\n" :
 										std::to_string(timePerChunk) + "ms per chunk (BAD)\n");
+	std::cout << "Total faces before back face culling: " << countFaces << std::endl;
+	*/
 
 	float lastFrame = 0.0f;
 	float currFrame = 0.0f;
+	//glm::vec3 prevCameraPos = camera.m_Position;
+	//glm::vec3 currCameraPos = prevCameraPos;
+	//bool cameraHasMoved = false;
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -350,11 +422,17 @@ int main() {
 	}
 	*/
 
+	ChunkManager chunkManager{ camera.m_Position };
+
 	// NEW Render Loop
 	while (!glfwWindowShouldClose(window)) {
 		currFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currFrame - lastFrame;
 		lastFrame = currFrame;
+
+		//currCameraPos = camera.m_Position;
+		//currCameraPos != prevCameraPos ? cameraHasMoved = true : cameraHasMoved = false;
+		//prevCameraPos = currCameraPos;
 
 		processInput(window);
 
@@ -362,7 +440,7 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glm::mat4 view = camera.getViewMatrix();
-		glm::mat4 projection = glm::perspective(glm::radians(camera.fov), (float)screenWidth / (float)screenHeight, 0.1f, 2000.0f);
+		glm::mat4 projection = glm::perspective(glm::radians(camera.m_Fov), (float)screenWidth / (float)screenHeight, 0.1f, 2000.0f);
 
 		#pragma region Terrain_Drawing
 		glActiveTexture(GL_TEXTURE0 + TEX_ARR_UNIT);
@@ -370,13 +448,18 @@ int main() {
 		// Shader Uniforms
 		glUniformMatrix4fv(glGetUniformLocation(basicShader.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(glGetUniformLocation(basicShader.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniformMatrix4fv(glGetUniformLocation(debugChunkShader.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(glGetUniformLocation(debugChunkShader.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 		glUniform1i(glGetUniformLocation(basicShader.id, "arrTex"), TEX_ARR_UNIT);
+		glUniform3fv(glGetUniformLocation(basicShader.id, "cameraPos"), 1, glm::value_ptr(camera.m_Position));
 		
 		//std::cout << "Rendering chunks..." << std::endl;
-		for (Chunk& c : chunks) {
-			c.render(basicShader, false);
-		}
+		//for (Chunk& c : chunks) {
+		//	c.render(basicShader, currCameraPos, false);
+		//}
 		//std::cout << "Finished rendering chunks." << std::endl;
+		chunkManager.renderChunks(basicShader);
+		//chunkManager.renderChunkCenters(debugChunkShader, cubeVAO);
 		#pragma endregion
 
 		glfwSwapBuffers(window);
@@ -390,9 +473,13 @@ int main() {
 	return 0;
 }
 
+std::vector<std::future<void>> futures;
+std::mutex chunksMutex;
+
+/*
 void pushChunk(std::vector<Chunk>& chunks, const int& x, const int& y) {
 	//std::cout << "Vector capacity: " << chunks.capacity() << std::endl;
-	Chunk chunk{ glm::ivec2(16 * x, 16 * y) };
+	Chunk chunk{ glm::ivec2(16 * x, 16 * y), camera.m_Position };
 	std::lock_guard<std::mutex> lock(chunksMutex);
 	chunks.emplace_back(std::move(chunk));
 }
@@ -414,7 +501,7 @@ void loadChunks(std::vector<Chunk>& chunks, const int renderDistance) {
 		future.get();
 	}
 }
-
+*/
 
 void processInput(GLFWwindow* window) {
 	// Close window

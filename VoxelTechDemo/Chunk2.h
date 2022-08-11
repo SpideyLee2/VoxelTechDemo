@@ -10,8 +10,6 @@
 #include "Block.h"
 #include "Shader.h"
 
-static std::unique_ptr<FastNoiseLite> noise;
-
 //static std::unordered_map<TEXTURE_TYPE, const std::shared_ptr<Texture2D>>* blockTextures;
 
 /*
@@ -27,39 +25,42 @@ const int8_t CUBE_OFFSET = 10;
 
 static int s_ChunkIDCounter = 0;
 
-class Chunk {
+class Chunk2 {
 public:
-	Chunk(glm::vec2&& worldPos, const glm::vec3& cameraPos);
-	Chunk(const Chunk& chunk) = delete;
-	Chunk(Chunk&& chunk) noexcept;
-	Chunk() = default;
+	Chunk2(const glm::vec3& worldPos);
+	Chunk2(const Chunk2& chunk) = delete;
+	Chunk2(Chunk2&& chunk) noexcept;
+	Chunk2() = default;
 
-	Chunk& operator=(const Chunk& chunk) = delete;
-	Chunk& operator=(Chunk&& chunk) noexcept;
+	Chunk2& operator=(const Chunk2& chunk) = delete;
+	Chunk2& operator=(Chunk2&& chunk) noexcept;
 
 	Block& getBlockAt(const glm::ivec3& blockPosInChunk) const;
-	void render(const Shader& shader, const glm::vec3& cameraPos, const bool& cameraHasMoved);
+	void render(const Shader& shader) const;
 	void generateVAOandVBO();
-	void updateVisibleFacesMesh(const glm::vec3& cameraPos);
+	void updateVisibleFacesMesh();
 	void populateVBO();
+	int getID();
 
 	unsigned int m_Vao;
 	unsigned int m_Vbo;
-	glm::vec2 m_WorldPos;
+	glm::vec3 m_WorldPos;
+	glm::mat4 m_Model;
 	std::unique_ptr<Block[]> m_pBlocks;
 
-	const static int X_DIMENSION = 64;
-	const static int Y_DIMENSION = 64;
-	const static int Z_DIMENSION = 64;
+	int m_NumVisFaces;
+	std::vector<Vertex> m_VisVerts;
+
+	const static int X_DIMENSION = 32;
+	const static int Y_DIMENSION = 32;
+	const static int Z_DIMENSION = 32;
 	const static int VOLUME = X_DIMENSION * Y_DIMENSION * Z_DIMENSION;
 	const static int CUBE_OFFSET = 10;
-	int m_NumVisFaces;
 private:
 	void generate();
 	void updateVFM(const int& x, const int& y, const int& z);
 
 	int m_ID;
 	//int m_NumVisFaces;
-	std::vector<Vertex> m_VisVerts;
 };
 

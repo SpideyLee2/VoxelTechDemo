@@ -1,81 +1,81 @@
 #include "Camera.h"
 
-Camera::Camera(glm::vec3 pos, glm::vec3 front, glm::vec3 up) : cameraPosition(pos), cameraFront(front), worldUp(up) {
-	yaw = -90.0f;
-	pitch = 0.0f;
+Camera::Camera(glm::vec3 pos, glm::vec3 front, glm::vec3 up) : m_Position(pos), m_Front(front), m_WorldUp(up) {
+	m_Yaw = -90.0f;
+	m_Pitch = 0.0f;
 
-	mouseSensitivity = 0.1f;
-	scrollSensitivity = 1.5f;
+	m_MouseSensitivity = 0.1f;
+	m_ScrollSensitivity = 1.5f;
 
-	speed = 10.0f;
-	speedMultiplier = 3.0f;
-	tempSpeed = speed;
+	m_Speed = 10.0f;
+	m_SpeedMultiplier = 3.0f;
+	m_TempSpeed = m_Speed;
 
-	fov = 45.0f;
+	m_Fov = 45.0f;
 
-	pitchConstraintHi = 89.0f;
-	pitchConstraintLo = -89.0f;
-	fovConstraintHi = 90.0f;
-	fovConstraintLo = 10.0f;
+	m_PitchConstraintHi = 89.0f;
+	m_PitchConstraintLo = -89.0f;
+	m_FovConstraintHi = 90.0f;
+	m_FovConstraintLo = 10.0f;
 }
 
 glm::mat4 Camera::getViewMatrix() {
-	return glm::lookAt(cameraPosition, cameraPosition + cameraFront, worldUp);
+	return glm::lookAt(m_Position, m_Position + m_Front, m_WorldUp);
 }
 
 void Camera::input(CAMERA_MOVEMENT movementDirection, float deltaTime) {
-	float velocity = tempSpeed * deltaTime;
+	float velocity = m_TempSpeed * deltaTime;
 	if (movementDirection == CAMERA_MOVEMENT::FORWARD) {
-		cameraPosition += cameraFront * velocity;
+		m_Position += m_Front * velocity;
 	}
 	if (movementDirection == CAMERA_MOVEMENT::BACKWARD) {
-		cameraPosition -= cameraFront * velocity;
+		m_Position -= m_Front * velocity;
 	}
 	if (movementDirection == CAMERA_MOVEMENT::LEFT) {
-		cameraPosition -= glm::normalize(glm::cross(cameraFront, worldUp)) * velocity;
+		m_Position -= glm::normalize(glm::cross(m_Front, m_WorldUp)) * velocity;
 	}
 	if (movementDirection == CAMERA_MOVEMENT::RIGHT) {
-		cameraPosition += glm::normalize(glm::cross(cameraFront, worldUp)) * velocity;
+		m_Position += glm::normalize(glm::cross(m_Front, m_WorldUp)) * velocity;
 	}
 	if (movementDirection == CAMERA_MOVEMENT::UP) {
-		cameraPosition += worldUp * velocity;
+		m_Position += m_WorldUp * velocity;
 	}
 	if (movementDirection == CAMERA_MOVEMENT::DOWN) {
-		cameraPosition -= worldUp * velocity;
+		m_Position -= m_WorldUp * velocity;
 	}
 }
 
 void Camera::applySpeedMultiplier() {
-	tempSpeed = speed * speedMultiplier;
+	m_TempSpeed = m_Speed * m_SpeedMultiplier;
 }
 
 void Camera::removeSpeedMultiplier() {
-	tempSpeed = speed;
+	m_TempSpeed = m_Speed;
 }
 
 void Camera::processMouseMove(float xOffset, float yOffset) {
-	yaw += xOffset * mouseSensitivity;
-	pitch += yOffset * mouseSensitivity;
+	m_Yaw += xOffset * m_MouseSensitivity;
+	m_Pitch += yOffset * m_MouseSensitivity;
 
-	if (pitch > pitchConstraintHi)
-		pitch = pitchConstraintHi;
-	else if (pitch < pitchConstraintLo)
-		pitch = pitchConstraintLo;
+	if (m_Pitch > m_PitchConstraintHi)
+		m_Pitch = m_PitchConstraintHi;
+	else if (m_Pitch < m_PitchConstraintLo)
+		m_Pitch = m_PitchConstraintLo;
 
 	glm::vec3 direction;
-	direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	direction.y = sin(glm::radians(-pitch));
-	direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-	cameraFront = glm::normalize(direction);
+	direction.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
+	direction.y = sin(glm::radians(-m_Pitch));
+	direction.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
+	m_Front = glm::normalize(direction);
 }
 
 void Camera::processMouseScroll(float yOffset) {
-	fov -= yOffset * scrollSensitivity;
+	m_Fov -= yOffset * m_ScrollSensitivity;
 
-	if (fov > fovConstraintHi)
-		fov = fovConstraintHi;
-	else if (fov < fovConstraintLo)
-		fov = fovConstraintLo;
+	if (m_Fov > m_FovConstraintHi)
+		m_Fov = m_FovConstraintHi;
+	else if (m_Fov < m_FovConstraintLo)
+		m_Fov = m_FovConstraintLo;
 }
 
 glm::mat4 Camera::myLookAt(glm::vec3 pos, glm::vec3 target, glm::vec3 wUp) {

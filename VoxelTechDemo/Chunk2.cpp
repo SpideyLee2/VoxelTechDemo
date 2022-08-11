@@ -1,83 +1,15 @@
-#include "Chunk.h"
+#include "Chunk2.h"
 
 #define position(x,y,z) (x + (y * X_DIMENSION) + (z * Y_DIMENSION * X_DIMENSION))
 
-Chunk::Chunk(glm::vec2&& worldPos, const glm::vec3& cameraPos) : m_ID(++s_ChunkIDCounter), m_WorldPos(worldPos), m_VisVerts(std::vector<Vertex>()) {
+Chunk2::Chunk2(const glm::vec3& worldPos) : 
+	m_ID(++s_ChunkIDCounter), 
+	m_WorldPos(worldPos), 
+	m_VisVerts(std::vector<Vertex>()) {
 	m_pBlocks = std::make_unique<Block[]>(VOLUME);
+	m_Model = glm::translate(glm::mat4(1.0f), m_WorldPos);
 
-	if (noise == nullptr) {
-		noise = std::make_unique<FastNoiseLite>();
-		noise->SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-		noise->SetFrequency(0.01f);
-		//noise.SetCellularDistanceFunction(FastNoiseLite::CellularDistanceFunction_Hybrid);
-		//noise.SetCellularReturnType(FastNoiseLite::CellularReturnType_CellValue);
-		//noise.SetDomainWarpType(FastNoiseLite::DomainWarpType_BasicGrid);
-		//noise.SetDomainWarpAmp(50.0f);
-		//noise.SetFractalType(FastNoiseLite::FractalType_DomainWarpProgressive);
-		//noise.SetFractalOctaves(5);
-		//noise.SetFractalLacunarity(2.0f);
-		//noise.SetFractalGain(0.60f);
-	}
-
-	//int noiseInd = 0;
-	glm::vec3 worldPosOffset{ m_WorldPos.x, 0.0f, m_WorldPos.y };
-	for (int z = 0; z < Z_DIMENSION; ++z) {
-		for (int x = 0; x < X_DIMENSION; ++x) {
-			// Creates the block at a position based on noise
-			int yPos = (int)(noise->GetNoise((float)x + m_WorldPos.x, (float)z + m_WorldPos.y) * CUBE_OFFSET) + ((Y_DIMENSION / 2) - 1);
-			glm::vec3 chunkPos = glm::ivec3(x, yPos, z);
-			glm::mat4 model = glm::translate(glm::mat4(1.0f), chunkPos + worldPosOffset);
-			//m_pModelMatrices[position(x, yPos, z)] = model;
-			//std::cout << "Inserting GRASS block at (" << x << ", " << yPos << ", " << z << ")\n";
-			m_pBlocks[position(x, yPos, z)] =
-				std::move(Block(
-					BLOCK_TYPE::Grass,
-					TEXTURE_TYPE::GrassTop,
-					model,
-					m_ID,
-					chunkPos));
-
-			// Fills in all the cubes above with air blocks
-			for (int y = yPos + 1; y < Y_DIMENSION; ++y) {
-				chunkPos = glm::ivec3(x, y, z);
-				model = glm::translate(glm::mat4(1.0f), chunkPos + worldPosOffset);
-				//m_pModelMatrices[position(x, y, z)] = model;
-				//std::cout << "Inserting AIR block at (" << x << ", " << y << ", " << z << ")\n";
-				m_pBlocks[position(x, y, z)] = std::move(
-					Block(BLOCK_TYPE::Air,
-						  TEXTURE_TYPE::Water,
-						  model,
-						  m_ID,
-						  chunkPos));
-			}
-
-			// Fills in all the cubes below with dirt blocks
-			for (int y = yPos - 1; y >= 0; --y) {
-				chunkPos = glm::ivec3(x, y, z);
-				model = glm::translate(glm::mat4(1.0f), chunkPos + worldPosOffset);
-				//m_pModelMatrices[position(x, y, z)] = model;
-				if (y + 5 < yPos) {
-					//std::cout << "Inserting STONE block at (" << x << ", " << y << ", " << z << ")\n";
-					m_pBlocks[position(x, y, z)] = std::move(
-						Block(BLOCK_TYPE::Stone,
-							  TEXTURE_TYPE::Stone,
-							  model,
-							  m_ID,
-							  chunkPos));
-				}
-				else {
-					//std::cout << "Inserting DIRT block at (" << x << ", " << y << ", " << z << ")\n";
-					m_pBlocks[position(x, y, z)] = std::move(
-						Block(BLOCK_TYPE::Dirt,
-							  TEXTURE_TYPE::Dirt,
-							  model,
-							  m_ID,
-							  chunkPos));
-				}
-			}
-		}
-	}
-	updateVisibleFacesMesh(cameraPos);
+	updateVisibleFacesMesh();
 	//populateVBO();
 
 	// Populates the adjacent blocks member of each block for occlusion culling purposes
@@ -104,12 +36,12 @@ Chunk::Chunk(glm::vec2&& worldPos, const glm::vec3& cameraPos) : m_ID(++s_ChunkI
 	//}
 }
 
-void Chunk::generateVAOandVBO() {
+void Chunk2::generateVAOandVBO() {
 	glGenVertexArrays(1, &m_Vao);
 	glGenBuffers(1, &m_Vbo);
 }
 
-void Chunk::populateVBO() {
+void Chunk2::populateVBO() {
 	glBindVertexArray(m_Vao);
 	glBindBuffer(GL_ARRAY_BUFFER, m_Vbo);
 	glBufferData(GL_ARRAY_BUFFER, m_VisVerts.size() * sizeof(Vertex), m_VisVerts.data(), GL_STATIC_DRAW);
@@ -126,22 +58,23 @@ void Chunk::populateVBO() {
 	glBindVertexArray(0);
 }
 
-void Chunk::render(const Shader& shader, const glm::vec3& cameraPos, const bool& cameraHasMoved) {
-	if (cameraHasMoved) {
-		updateVisibleFacesMesh(cameraPos);
-		populateVBO();
-	}
+int Chunk2::getID() {
+	return m_ID;
+}
+
+void Chunk2::render(const Shader& shader) const {
+	//if (cameraHasMoved) {
+	//	updateVisibleFacesMesh();
+	//	populateVBO();
+	//}
 	shader.use();
 
-	glUniformMatrix4fv(glGetUniformLocation(shader.id, "model"), 1, GL_FALSE, 
-					   glm::value_ptr(glm::translate(glm::mat4(1.0f), glm::vec3(m_WorldPos.x, 0.0f, m_WorldPos.y))));
+	glUniformMatrix4fv(glGetUniformLocation(shader.id, "model"), 1, GL_FALSE, glm::value_ptr(m_Model));
 
 	glBindVertexArray(m_Vao);
 	glDrawArrays(GL_TRIANGLES, 0, m_NumVisFaces * Block::VERTS_PER_FACE);
 }
 
-// Updates the visible vertices vector with the vertices of the faces not occluded by other solid blocks.
-// Returns the count of these visible faces.
 // WITH away-face culling
 //void Chunk::updateVisibleFacesMesh(const glm::vec3& cameraPos) {
 //	//bool backVis = false, frontVis = false, leftVis = false, rightVis = false, bottomVis = false, topVis = false;
@@ -506,8 +439,10 @@ void Chunk::render(const Shader& shader, const glm::vec3& cameraPos, const bool&
 //	}
 //}
 
+// Updates the visible vertices vector with the vertices of the faces not occluded by other solid blocks.
+// Returns the count of these visible faces.
 // WITHOUT away-face culling
-void Chunk::updateVisibleFacesMesh(const glm::vec3& cameraPos) {
+void Chunk2::updateVisibleFacesMesh() {
 	//bool backVis = false, frontVis = false, leftVis = false, rightVis = false, bottomVis = false, topVis = false;
 	m_NumVisFaces = 0;
 	for (int z = 0; z < Z_DIMENSION; ++z) {
@@ -846,25 +781,23 @@ void Chunk::updateVisibleFacesMesh(const glm::vec3& cameraPos) {
 	}
 }
 
-Block& Chunk::getBlockAt(const glm::ivec3& blockPosInChunk) const {
-	int x = blockPosInChunk.x;
-	int y = blockPosInChunk.y;
-	int z = blockPosInChunk.z;
-	return m_pBlocks[position(x,y,z)];
+Block& Chunk2::getBlockAt(const glm::ivec3& blockPosInChunk) const {
+	return m_pBlocks[position(blockPosInChunk.x, blockPosInChunk.y, blockPosInChunk.z)];
 }
 
-Chunk::Chunk(Chunk&& chunk) noexcept : 
+Chunk2::Chunk2(Chunk2&& chunk) noexcept :
 	m_ID(std::move(chunk.m_ID)),
-	m_WorldPos(std::move(chunk.m_WorldPos)), 
-	m_VisVerts(std::move(chunk.m_VisVerts)), 
+	m_WorldPos(std::move(chunk.m_WorldPos)),
+	m_VisVerts(std::move(chunk.m_VisVerts)),
 	m_pBlocks(std::move(chunk.m_pBlocks)),
 	m_Vao(std::move(chunk.m_Vao)),
 	m_Vbo(std::move(chunk.m_Vbo)),
-	m_NumVisFaces(std::move(chunk.m_NumVisFaces)) {
+	m_NumVisFaces(std::move(chunk.m_NumVisFaces)), 
+	m_Model(std::move(chunk.m_Model)) {
 
 }
 
-Chunk& Chunk::operator=(Chunk&& chunk) noexcept {
+Chunk2& Chunk2::operator=(Chunk2&& chunk) noexcept {
 	if (this != &chunk) {
 		this->m_Vao = std::move(chunk.m_Vao);
 		this->m_Vbo = std::move(chunk.m_Vbo);
@@ -873,6 +806,7 @@ Chunk& Chunk::operator=(Chunk&& chunk) noexcept {
 		this->m_ID = std::move(chunk.m_ID);
 		this->m_NumVisFaces = std::move(chunk.m_NumVisFaces);
 		this->m_VisVerts = std::move(chunk.m_VisVerts);
+		this->m_Model = std::move(chunk.m_Model);
 	}
 
 	return *this;
