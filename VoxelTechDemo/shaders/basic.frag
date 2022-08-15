@@ -29,10 +29,8 @@ void main() {
 	float dist = distance(cameraPos, fs_in.fragPos);
 	if (dist > fogStartDist) {
 		color = mix(color, fogColor, clamp((dist - fogStartDist) / fogFadeDist, 0.0, 1.0));
-		FragColor = vec4(color, 1.0);
 	}
-	else
-		FragColor = texture(arrTex, fs_in.texCoords);
 	
-	//FragColor = vec4(fs_in.normal, 1.0);
+	//FragColor = vec4(color, 1.0);
+	FragColor = vec4(fs_in.normal, 1.0);
 }

@@ -28,17 +28,16 @@ static int s_ChunkIDCounter = 0;
 class Chunk2 {
 public:
 	Chunk2(const glm::vec3& worldPos);
-	Chunk2(const Chunk2& chunk) = delete;
+	Chunk2(const Chunk2& chunk) = delete; // Don't want to copy chunks
 	Chunk2(Chunk2&& chunk) noexcept;
 	Chunk2() = default;
+	~Chunk2() = default;
 
-	Chunk2& operator=(const Chunk2& chunk) = delete;
+	Chunk2& operator=(const Chunk2& chunk) = delete; // Don't want to copy chunks
 	Chunk2& operator=(Chunk2&& chunk) noexcept;
 
-	Block& getBlockAt(const glm::ivec3& blockPosInChunk) const;
 	void render(const Shader& shader) const;
 	void generateVAOandVBO();
-	void updateVisibleFacesMesh();
 	void populateVBO();
 	int getID();
 
@@ -57,8 +56,8 @@ public:
 	const static int VOLUME = X_DIMENSION * Y_DIMENSION * Z_DIMENSION;
 	const static int CUBE_OFFSET = 10;
 private:
-	void generate();
-	void updateVFM(const int& x, const int& y, const int& z);
+	//void generate();
+	//void updateVFM(const int& x, const int& y, const int& z);
 
 	int m_ID;
 	//int m_NumVisFaces;

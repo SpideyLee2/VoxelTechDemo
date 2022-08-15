@@ -101,7 +101,7 @@ float cubeVertices[] = {
 	-1.0f,  1.0f,  1.0f,    0.0f,  1.0f,    0.0f, 0.0f, 0.0f  // bottom-left        
 };
 
-Camera camera{ glm::vec3(0.0f, 150.0f, 3.0f) };
+Camera camera{ glm::vec3(0.0f, 50.0f, 0.0f) };
 
 int main() {
 	#pragma region GFLW_Window_Setup
@@ -235,41 +235,10 @@ int main() {
 	glActiveTexture(GL_TEXTURE0);
 	#pragma endregion
 
-	/*
-	std::chrono::steady_clock time;
-
-	std::cout << "Generating chunks..." << std::endl;
-	const int RENDER_DIST = 16;
-	
-	std::vector<Chunk> chunks = std::vector<Chunk>();
-	auto startTime = time.now();
-	loadChunks(chunks, RENDER_DIST);
-	auto endTime = time.now();
-	auto elapsedChunkLoadTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-	std::cout << "Time to load " << chunks.size() << " chunks: " << elapsedChunkLoadTime << "ms\n";
-	float timePerChunk = elapsedChunkLoadTime / (float)(chunks.size());
-	std::cout << (timePerChunk < 6.0f ? std::to_string(timePerChunk) + "ms per chunk (GOOD)\n" : 
-										std::to_string(timePerChunk) + "ms per chunk (BAD)\n");
-	int countFaces = 0;
-	for (Chunk& c : chunks) {
-		c.generateVAOandVBO();
-		//c.updateVisibleFacesMesh();
-		c.populateVBO();
-		countFaces += c.m_NumVisFaces;
-	}
-	endTime = time.now();
-	elapsedChunkLoadTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-	std::cout << "Time to load " << chunks.size() << " chunks AND populate the VBO: " << elapsedChunkLoadTime << "ms\n";
-	timePerChunk = elapsedChunkLoadTime / (float)(chunks.size());
-	std::cout << (timePerChunk < 6.0f ? std::to_string(timePerChunk) + "ms per chunk (GOOD)\n" :
-										std::to_string(timePerChunk) + "ms per chunk (BAD)\n");
-	std::cout << "Total faces before back face culling: " << countFaces << std::endl;
-	*/
-
 	float lastFrame = 0.0f;
 	float currFrame = 0.0f;
 	//glm::vec3 prevCameraPos = camera.m_Position;
-	//glm::vec3 currCameraPos = prevCameraPos;
+	//glm::vec3 currCameraPos;
 	//bool cameraHasMoved = false;
 
 	glEnable(GL_DEPTH_TEST);
@@ -430,6 +399,8 @@ int main() {
 		deltaTime = currFrame - lastFrame;
 		lastFrame = currFrame;
 
+		//std::cout << "Camera Pos: (" << camera.m_Position.x << ", " << camera.m_Position.y << ", " << camera.m_Position.z << ")\n";
+
 		//currCameraPos = camera.m_Position;
 		//currCameraPos != prevCameraPos ? cameraHasMoved = true : cameraHasMoved = false;
 		//prevCameraPos = currCameraPos;
@@ -458,6 +429,7 @@ int main() {
 		//	c.render(basicShader, currCameraPos, false);
 		//}
 		//std::cout << "Finished rendering chunks." << std::endl;
+		chunkManager.recalculate(camera.m_Position);
 		chunkManager.renderChunks(basicShader);
 		//chunkManager.renderChunkCenters(debugChunkShader, cubeVAO);
 		#pragma endregion
@@ -475,33 +447,6 @@ int main() {
 
 std::vector<std::future<void>> futures;
 std::mutex chunksMutex;
-
-/*
-void pushChunk(std::vector<Chunk>& chunks, const int& x, const int& y) {
-	//std::cout << "Vector capacity: " << chunks.capacity() << std::endl;
-	Chunk chunk{ glm::ivec2(16 * x, 16 * y), camera.m_Position };
-	std::lock_guard<std::mutex> lock(chunksMutex);
-	chunks.emplace_back(std::move(chunk));
-}
-
-void loadChunks(std::vector<Chunk>& chunks, const int renderDistance) {
-	for (int y = -renderDistance/2; y < renderDistance/2; ++y) {
-		for (int x = -renderDistance/2; x < renderDistance/2; ++x) {
-			//pushChunk(chunks, x, y);
-			futures.push_back(std::async(std::launch::async, pushChunk, std::ref(chunks), x, y));
-		}
-	}
-	//for (int y = 0; y < renderDistance; ++y) {
-	//	for (int x = 0; x < renderDistance; ++x) {
-	//		//pushChunk(chunks, x, y);
-	//		futures.push_back(std::async(std::launch::async, pushChunk, std::ref(chunks), x, y));
-	//	}
-	//}
-	for (std::future<void>& future : futures) {
-		future.get();
-	}
-}
-*/
 
 void processInput(GLFWwindow* window) {
 	// Close window
