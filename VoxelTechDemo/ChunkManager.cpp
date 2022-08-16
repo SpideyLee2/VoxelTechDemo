@@ -1,48 +1,61 @@
 #include "ChunkManager.h"
 
 // This only works if the looping is being done like: for(z){ for(y){ for(x){ }}}
-#define position(x,y,z) (x + (y * Chunk2::X_DIMENSION) + (z * Chunk2::Y_DIMENSION * Chunk2::X_DIMENSION))
+#define position(x,y,z) (x + (y * Chunk::X_DIMENSION) + (z * Chunk::Y_DIMENSION * Chunk::X_DIMENSION))
 
 ChunkManager::ChunkManager(const glm::vec3& playerPos) {
 	// Lazy instantiation not necessary as ChunkManager will only need to be instantiated once
 	noise = std::make_unique<FastNoiseLite>();
 	noise->SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
 	noise->SetFrequency(0.01f);
-	//noise.SetCellularDistanceFunction(FastNoiseLite::CellularDistanceFunction_Hybrid);
-	//noise.SetCellularReturnType(FastNoiseLite::CellularReturnType_CellValue);
-	//noise.SetDomainWarpType(FastNoiseLite::DomainWarpType_BasicGrid);
-	//noise.SetDomainWarpAmp(50.0f);
-	//noise.SetFractalType(FastNoiseLite::FractalType_DomainWarpProgressive);
-	//noise.SetFractalOctaves(5);
-	//noise.SetFractalLacunarity(2.0f);
-	//noise.SetFractalGain(0.60f);
+	//noise->SetCellularDistanceFunction(FastNoiseLite::CellularDistanceFunction_Hybrid);
+	//noise->SetCellularReturnType(FastNoiseLite::CellularReturnType_CellValue);
+	//noise->SetDomainWarpType(FastNoiseLite::DomainWarpType_BasicGrid);
+	//noise->SetDomainWarpAmp(50.0f);
+	//noise->SetFractalType(FastNoiseLite::FractalType_DomainWarpProgressive);
+	//noise->SetFractalOctaves(5);
+	//noise->SetFractalLacunarity(2.0f);
+	//noise->SetFractalGain(0.60f);
 	
+	ChunkManager cmInst;
+	std::vector<std::future<Chunk>> futures;
+
 	const int NUM_CHUNKS = (m_ChunkRenderRadius * 2 + 1) * (m_ChunkRenderRadius * 2 + 1) * NUM_CHUNKS_PER_STACK;
 
 	// Reserve memory enough for every chunk that will be initially rendered
-	//m_Chunks.reserve(NUM_CHUNKS);
+	m_Chunks.reserve(NUM_CHUNKS);
+	futures.reserve(NUM_CHUNKS);
 	
-	int m_LastRoundedPlayerPosX = roundPosToNearestChunk(playerPos.x, Chunk2::X_DIMENSION);
-	int m_LastRoundedPlayerPosZ = roundPosToNearestChunk(playerPos.z, Chunk2::Z_DIMENSION);
+	int m_LastRoundedPlayerPosX = roundPosToNearestChunk(playerPos.x, Chunk::X_DIMENSION);
+	int m_LastRoundedPlayerPosZ = roundPosToNearestChunk(playerPos.z, Chunk::Z_DIMENSION);
 
 	// Loads the initial chunks around the player
 	for (int y = -NUM_CHUNKS_PER_STACK / 2; y < NUM_CHUNKS_PER_STACK / 2; ++y) {
 		// -1 to render radius to adjust for chunks being generated from bottom-left corner (x-z plane)
 		for (int z = -m_ChunkRenderRadius; z <= m_ChunkRenderRadius; ++z) {
 			for (int x = -m_ChunkRenderRadius; x <= m_ChunkRenderRadius; ++x) {
-				Chunk2 chunk = loadChunk(glm::vec3(
-					m_LastRoundedPlayerPosX + (Chunk2::X_DIMENSION * x),
-					Chunk2::Y_DIMENSION * y,
-					m_LastRoundedPlayerPosZ + (Chunk2::Z_DIMENSION * z))
-				);
-				chunk.generateVAOandVBO();
-				chunk.populateVBO();
-				//m_Chunks.try_emplace(chunk.m_WorldPos, std::move(chunk));
-				m_Chunks.emplace(chunk.m_WorldPos, std::move(chunk));
-
-				//std::cout << "Rendering chunk at: " << chunkWorldPos.x << ", " << chunkWorldPos.y << ", " << chunkWorldPos.z << std::endl;
+				futures.emplace_back(std::move(
+					// Unavoidable vec3 copy
+					std::async(std::launch::async,
+							   &ChunkManager::loadChunk,
+							   &cmInst,
+							   glm::vec3(
+								   m_LastRoundedPlayerPosX + (Chunk::X_DIMENSION * x),
+								   Chunk::Y_DIMENSION * y,
+								   m_LastRoundedPlayerPosZ + (Chunk::Z_DIMENSION * z)
+							   )
+					)
+				));
 			}
 		}
+	}
+
+	for (auto& f : futures) {
+		Chunk chunk = f.get();
+		chunk.generateVAOandVBO();
+		chunk.populateVBO();
+		m_Chunks.try_emplace(chunk.m_WorldPos, std::move(chunk));
+		//m_Chunks.emplace(chunk.m_WorldPos, std::move(chunk));
 	}
 }
 
@@ -53,19 +66,19 @@ int ChunkManager::roundPosToNearestChunk(const float& pos, const int& dim) const
 }
 
 // Handles the terrain generation for a chunk
-Chunk2 ChunkManager::loadChunk(glm::vec3&& worldPos) {
+Chunk ChunkManager::loadChunk(glm::vec3&& worldPos) {
 	//std::cout << "Loading chunk at (" << worldPos.x << ", " << worldPos.y << ", " << worldPos.z << ")\n";
-	Chunk2 chunk{ worldPos };
+	Chunk chunk{ worldPos };
 
 	// Puts blocks in the chunk
-	for (int z = 0; z < Chunk2::Z_DIMENSION; ++z) {
-		for (int x = 0; x < Chunk2::X_DIMENSION; ++x) {
+	for (int z = 0; z < Chunk::Z_DIMENSION; ++z) {
+		for (int x = 0; x < Chunk::X_DIMENSION; ++x) {
 			// Gets the y position of the sampled noise
 			int yNoisePos = static_cast<int>(noise->GetNoise(
 				x + chunk.m_WorldPos.x,
 				z + chunk.m_WorldPos.z
-			) * Chunk2::CUBE_OFFSET) + Chunk2::Y_DIMENSION / 2 - 1;
-			for (int y = 0; y < Chunk2::Y_DIMENSION; ++y) {
+			) * Chunk::CUBE_OFFSET) + Chunk::Y_DIMENSION / 2 - 1;
+			for (int y = 0; y < Chunk::Y_DIMENSION; ++y) {
 				glm::vec3 blockPosInChunk = glm::ivec3(x, y, z);
 				glm::mat4 blockModel = glm::translate(glm::mat4(1.0f),
 													  blockPosInChunk + chunk.m_WorldPos);
@@ -114,8 +127,9 @@ Chunk2 ChunkManager::loadChunk(glm::vec3&& worldPos) {
 			}
 		}
 	}
+
 	updateVisibleVertices(chunk);
-	return std::move(chunk);
+	return chunk;
 }
 
 // Removes the chunk at worldPos from the map
@@ -128,12 +142,12 @@ void ChunkManager::unloadChunk(const glm::vec3& worldPos) {
 // Updates the visible vertices vector with the vertices of the faces not occluded by other solid blocks.
 // Returns the count of these visible faces.
 // WITHOUT away-face culling
-void ChunkManager::updateVisibleVertices(Chunk2& chunk) {
+void ChunkManager::updateVisibleVertices(Chunk& chunk) {
 	//bool backVis = false, frontVis = false, leftVis = false, rightVis = false, bottomVis = false, topVis = false;
 	chunk.m_NumVisFaces = 0;
-	for (int z = 0; z < Chunk2::Z_DIMENSION; ++z) {
-		for (int y = 0; y < Chunk2::Y_DIMENSION; ++y) {
-			for (int x = 0; x < Chunk2::X_DIMENSION; ++x) {
+	for (int z = 0; z < Chunk::Z_DIMENSION; ++z) {
+		for (int y = 0; y < Chunk::Y_DIMENSION; ++y) {
+			for (int x = 0; x < Chunk::X_DIMENSION; ++x) {
 				//updateVFM(x, y, z);
 				Block& block = chunk.m_pBlocks[position(x, y, z)];
 				if (block.m_IsSolid) {
@@ -193,8 +207,8 @@ void ChunkManager::updateVisibleVertices(Chunk2& chunk) {
 						++chunk.m_NumVisFaces;
 					}
 					// Appends right face if true
-					if ((x < Chunk2::X_DIMENSION - 1 && !chunk.m_pBlocks[position((x + 1), y, z)].m_IsSolid)
-						|| x == Chunk2::X_DIMENSION - 1) {
+					if ((x < Chunk::X_DIMENSION - 1 && !chunk.m_pBlocks[position((x + 1), y, z)].m_IsSolid)
+						|| x == Chunk::X_DIMENSION - 1) {
 						//std::cout << "Appending right face\n";
 						// top-left
 						chunk.m_VisVerts.push_back(
@@ -302,8 +316,8 @@ void ChunkManager::updateVisibleVertices(Chunk2& chunk) {
 						++chunk.m_NumVisFaces;
 					}
 					// Appends top face if true
-					if ((y < Chunk2::Y_DIMENSION - 1 && !chunk.m_pBlocks[position(x, (y + 1), z)].m_IsSolid)
-						|| y == Chunk2::Y_DIMENSION - 1) {
+					if ((y < Chunk::Y_DIMENSION - 1 && !chunk.m_pBlocks[position(x, (y + 1), z)].m_IsSolid)
+						|| y == Chunk::Y_DIMENSION - 1) {
 						//std::cout << "Appending top face\n";
 						// top-left
 						chunk.m_VisVerts.push_back(
@@ -411,8 +425,8 @@ void ChunkManager::updateVisibleVertices(Chunk2& chunk) {
 						++chunk.m_NumVisFaces;
 					}
 					// Append front face if true
-					if ((z < Chunk2::Z_DIMENSION - 1 && !chunk.m_pBlocks[position(x, y, (z + 1))].m_IsSolid)
-						|| z == Chunk2::Z_DIMENSION - 1) {
+					if ((z < Chunk::Z_DIMENSION - 1 && !chunk.m_pBlocks[position(x, y, (z + 1))].m_IsSolid)
+						|| z == Chunk::Z_DIMENSION - 1) {
 						//std::cout << "Appending front face\n";
 						// bottom-left
 						chunk.m_VisVerts.push_back(
@@ -486,132 +500,152 @@ void ChunkManager::renderChunkCenters(const Shader& shader, const unsigned int& 
 	}
 }
 
-/*
-void pushChunk(std::vector<Chunk>& chunks, const int& x, const int& y) {
-	//std::cout << "Vector capacity: " << chunks.capacity() << std::endl;
-	Chunk chunk{ glm::ivec2(16 * x, 16 * y), camera.m_Position };
-	std::lock_guard<std::mutex> lock(chunksMutex);
-	chunks.emplace_back(std::move(chunk));
-}
-
-void loadChunks(std::vector<Chunk>& chunks, const int renderDistance) {
-	for (int y = -renderDistance/2; y < renderDistance/2; ++y) {
-		for (int x = -renderDistance/2; x < renderDistance/2; ++x) {
-			//pushChunk(chunks, x, y);
-			futures.push_back(std::async(std::launch::async, pushChunk, std::ref(chunks), x, y));
-		}
-	}
-
-	for (std::future<void>& future : futures) {
-		future.get();
-	}
-}
-*/
-
 // Determines whether to load/unload chunks and which ones to load/unload
 // Adjusts for if the game lags and the player moves across multiple chunks in one frame
 void ChunkManager::recalculate(const glm::vec3& playerPos) {
-	int currRoundedPlayerPosX = roundPosToNearestChunk(playerPos.x, Chunk2::X_DIMENSION);
-	int currRoundedPlayerPosZ = roundPosToNearestChunk(playerPos.z, Chunk2::Z_DIMENSION);
+	int currRoundedPlayerPosX = roundPosToNearestChunk(playerPos.x, Chunk::X_DIMENSION);
+	int currRoundedPlayerPosZ = roundPosToNearestChunk(playerPos.z, Chunk::Z_DIMENSION);
 
-	// Ex: m_ChunkRenderRadius = 1 (3x3 grid of chunk stacks)
-	// Player moves from chunk at (0,0,0) to chunk at (32,0,0). Equivalent to a movement of (1,0,0) in the "chunk grid".
-	// Unload chunks at (-32,0,32), (-32,0,0), (-32,0,-32)
-	// Then, load chunks at (64,0,64), (64,0,32), (64,0,0)
-
-	// If render radius = 1, any translation to another chunk requires loading 3 new chunks and loading 3 previous ones
-	// If render radius = 2, load 5, unload 5
-	// If render radius = 3, load 7, unload 7
+	// If the player moved to a new chunk this frame, loads and unloads necessary chunks to maintain render radius
 	if (currRoundedPlayerPosX != m_LastRoundedPlayerPosX || currRoundedPlayerPosZ != m_LastRoundedPlayerPosZ) {
+		std::cout << "Player moved from chunk stack at ("
+			<< m_LastRoundedPlayerPosX << ", " << m_LastRoundedPlayerPosZ
+			<< ") to chunk stack at ("
+			<< currRoundedPlayerPosX << ", " << currRoundedPlayerPosZ << ")\n";
+
+		auto startChunkGen = std::chrono::steady_clock::now();
 		ChunkManager cmInst;
-		std::vector<std::future<Chunk2>> futures;
 
 		// Stores the direction (+/-) and number of chunks moved across.
-		int xDiff = (currRoundedPlayerPosX - m_LastRoundedPlayerPosX) / Chunk2::X_DIMENSION;
-		int zDiff = (currRoundedPlayerPosZ - m_LastRoundedPlayerPosZ) / Chunk2::Z_DIMENSION;
-		int xDiffAbs = abs(xDiff);
-		int zDiffAbs = abs(zDiff);
+		int xDiff = (currRoundedPlayerPosX - m_LastRoundedPlayerPosX) / Chunk::X_DIMENSION;
+		int zDiff = (currRoundedPlayerPosZ - m_LastRoundedPlayerPosZ) / Chunk::Z_DIMENSION;
 
 		// Reserves enough space to store the future of each chunk that gets loaded
-		const int CHUNKS_PER_ROW = (m_ChunkRenderRadius * 2 + 1) * NUM_CHUNKS_PER_STACK;
-		futures.reserve(CHUNKS_PER_ROW * xDiffAbs + CHUNKS_PER_ROW * zDiffAbs);
+		const int CHUNK_STACKS_PER_ROW = m_ChunkRenderRadius * 2 + 1;
+		const int CHUNK_STACKS_TO_LOAD = CHUNK_STACKS_PER_ROW * abs(xDiff) + CHUNK_STACKS_PER_ROW * abs(zDiff);
+		std::vector<std::future<std::vector<Chunk>>> futures;
+		futures.reserve(CHUNK_STACKS_TO_LOAD);
 
+		std::chrono::duration<double, std::milli> duration;
 		// Player moved to a new chunk stack in the +/- x direction
 		if (xDiff != 0) {
-			std::cout << "Player moved from chunk stack at (" 
-				<< m_LastRoundedPlayerPosX << ", " << m_LastRoundedPlayerPosZ 
-				<< ") to chunk stack at (" 
-				<< currRoundedPlayerPosX << ", " << currRoundedPlayerPosZ << ")\n";
-
 			// Unload old chunks that are no longer within the render distance
 			for (int i = -m_ChunkRenderRadius; i <= m_ChunkRenderRadius; ++i) {
-				// TODO: Batch chunk stack unload calls and do concurrently using std::async
+				// TODO: Profile batching concurrent chunk stack unload calls with std::async
 				for (int y = -NUM_CHUNKS_PER_STACK / 2; y < NUM_CHUNKS_PER_STACK / 2; ++y) {
-					unloadChunk(glm::vec3(m_LastRoundedPlayerPosX - xDiff * m_ChunkRenderRadius * Chunk2::X_DIMENSION,
-										  y * Chunk2::Y_DIMENSION,
-										  m_LastRoundedPlayerPosZ - i * Chunk2::Z_DIMENSION));
+					unloadChunk(glm::vec3(m_LastRoundedPlayerPosX - xDiff * m_ChunkRenderRadius * Chunk::X_DIMENSION,
+										  y * Chunk::Y_DIMENSION,
+										  m_LastRoundedPlayerPosZ - i * Chunk::Z_DIMENSION)
+					);
 				}
 			}
 
 			// Load new chunks that entered the render distance
 			for (int i = -m_ChunkRenderRadius; i <= m_ChunkRenderRadius; ++i) {
-				for (int y = -NUM_CHUNKS_PER_STACK / 2; y < NUM_CHUNKS_PER_STACK / 2; ++y) {
-					futures.emplace_back(std::move(
-						// Unavoidable vec3 copy
-						std::async(std::launch::async,
-								   &ChunkManager::loadChunk,
-								   &cmInst,
-								   glm::vec3(currRoundedPlayerPosX + xDiff * m_ChunkRenderRadius * Chunk2::X_DIMENSION,
-											 y * Chunk2::Y_DIMENSION,
-											 currRoundedPlayerPosZ + i * Chunk2::Z_DIMENSION)
-						)
-					));
-				}
+				// Profiled. Loading chunk stacks concurrently is faster than loading individual chunks concurrently
+				futures.emplace_back(std::move(
+					std::async(std::launch::async,
+								&ChunkManager::loadChunkStack,
+								&cmInst,
+								currRoundedPlayerPosX + xDiff * m_ChunkRenderRadius * Chunk::X_DIMENSION,
+								currRoundedPlayerPosZ + i * Chunk::Z_DIMENSION
+					)
+				));
 			}
 		}
 
 		// Player moved to a new chunk stack in the +/- z direction
 		if (zDiff != 0) {
-			std::cout << "Player moved from chunk stack at ("
-				<< m_LastRoundedPlayerPosX << ", " << m_LastRoundedPlayerPosZ
-				<< ") to chunk stack at ("
-				<< currRoundedPlayerPosX << ", " << currRoundedPlayerPosZ << ")\n";
-
 			// Unload old chunks that are no longer within the render distance
 			for (int i = -m_ChunkRenderRadius; i <= m_ChunkRenderRadius; ++i) {
 				for (int y = -NUM_CHUNKS_PER_STACK / 2; y < NUM_CHUNKS_PER_STACK / 2; ++y) {
-					unloadChunk(glm::vec3(m_LastRoundedPlayerPosX - i * Chunk2::X_DIMENSION,
-										  y * Chunk2::Y_DIMENSION,
-										  m_LastRoundedPlayerPosZ - zDiff * m_ChunkRenderRadius * Chunk2::Z_DIMENSION));
+					// TODO: Profile batching concurrent chunk stack unload calls with std::async
+					unloadChunk(glm::vec3(m_LastRoundedPlayerPosX - i * Chunk::X_DIMENSION,
+										  y * Chunk::Y_DIMENSION,
+										  m_LastRoundedPlayerPosZ - zDiff * m_ChunkRenderRadius * Chunk::Z_DIMENSION)
+					);
 				}
 			}
 
 			// Load new chunks that entered the render distance
 			for (int i = -m_ChunkRenderRadius; i <= m_ChunkRenderRadius; ++i) {
-				for (int y = -NUM_CHUNKS_PER_STACK / 2; y < NUM_CHUNKS_PER_STACK / 2; ++y) {
-					futures.emplace_back(std::move(
-						// Unavoidable vec3 copy
-						std::async(std::launch::async,
-								   &ChunkManager::loadChunk,
-								   &cmInst,
-								   glm::vec3(currRoundedPlayerPosX + i * Chunk2::X_DIMENSION,
-											 y * Chunk2::Y_DIMENSION,
-											 currRoundedPlayerPosZ + zDiff * m_ChunkRenderRadius * Chunk2::Z_DIMENSION)
-						)
-					));
-				}
+				// Profiled. Loading chunk stacks concurrently is faster than loading individual chunks concurrently
+				futures.emplace_back(std::move(
+					std::async(std::launch::async,
+							   &ChunkManager::loadChunkStack,
+							   &cmInst,
+							   currRoundedPlayerPosX + i * Chunk::X_DIMENSION,
+							   currRoundedPlayerPosZ + zDiff * m_ChunkRenderRadius * Chunk::Z_DIMENSION
+					)
+				));
 			}
 		}
 
-		// Resynchronize so last rounded player x and z positons can be set
+		auto startFutures = std::chrono::steady_clock::now();
+		// Resynchronize
 		for (auto& f : futures) {
-			Chunk2 chunk = f.get();
-			chunk.generateVAOandVBO();
-			chunk.populateVBO();
-			//m_Chunks.try_emplace(chunk.m_WorldPos, std::move(chunk));
-			m_Chunks.emplace(chunk.m_WorldPos, std::move(chunk));
+			auto chunks = f.get();
+			for (Chunk& chunk : chunks) {
+				chunk.generateVAOandVBO();
+				chunk.populateVBO();
+
+				m_Chunks.try_emplace(chunk.m_WorldPos, std::move(chunk));
+				//m_Chunks.emplace(chunk.m_WorldPos, std::move(chunk));
+			}
 		}
+		auto endFutures = std::chrono::steady_clock::now();
+
 		m_LastRoundedPlayerPosX = currRoundedPlayerPosX;
 		m_LastRoundedPlayerPosZ = currRoundedPlayerPosZ;
+
+		auto endChunkGen = std::chrono::steady_clock::now();
+
+		// Elapsed times
+		const int TOTAL_CHUNKS_TO_LOAD = NUM_CHUNKS_PER_STACK * CHUNK_STACKS_TO_LOAD;
+		duration = endFutures - startFutures;
+		std::cout << "Time to handle futures of " << TOTAL_CHUNKS_TO_LOAD << " chunks: "
+			<< duration.count() << "ms    AVG: " 
+			<< duration.count() / TOTAL_CHUNKS_TO_LOAD << "ms\n";
+
+		duration = endChunkGen - startChunkGen;
+		std::cout << "====== Time to load/unload " << TOTAL_CHUNKS_TO_LOAD << " chunks: "
+			<< duration.count() << "ms    AVG: " 
+			<< duration.count() / TOTAL_CHUNKS_TO_LOAD << "ms ======\n\n";
 	}
 }
+
+// Loads a stack of chunks at (x, z)
+std::vector<Chunk> ChunkManager::loadChunkStack(const int& x, const int& z) {
+	std::vector<Chunk> chunks;
+	chunks.reserve(NUM_CHUNKS_PER_STACK);
+	for (int y = -NUM_CHUNKS_PER_STACK / 2; y < NUM_CHUNKS_PER_STACK / 2; ++y) {
+		chunks.emplace_back(loadChunk(glm::vec3(x, y * Chunk::Y_DIMENSION, z)));
+	}
+
+	return chunks;
+}
+
+// Populates the adjacent blocks member of each block for occlusion culling purposes
+/*
+for (int z = 0; z < Z_DIMENSION; ++z) {
+	for (int x = 0; x < X_DIMENSION; ++x) {
+		for (int y = 0; y < Y_DIMENSION; ++y) {
+			std::string blockType = m_pBlocks[position(x, y, z)].getBlockType() == BLOCK_TYPE::Air ? "Air" : "Solid";
+			std::cout << "Block Type: " << blockType;
+			std::cout << "Setting adjacent blocks...\n";
+			x == 0 ? m_pBlocks[position(x, y, z)].setAdjBlockType(BLOCK_TYPE::Air, 2)
+				   : m_pBlocks[position(x, y, z)].setAdjBlockType(m_pBlocks[position(x - 1, y, z)].getBlockType(), 2);
+			y == 0 ? m_pBlocks[position(x, y, z)].setAdjBlockType(BLOCK_TYPE::Air, 4)
+				   : m_pBlocks[position(x, y, z)].setAdjBlockType(m_pBlocks[position(x, y - 1, z)].getBlockType(), 4);
+			z == 0 ? m_pBlocks[position(x, y, z)].setAdjBlockType(BLOCK_TYPE::Air, 0)
+				   : m_pBlocks[position(x, y, z)].setAdjBlockType(m_pBlocks[position(x, y, z - 1)].getBlockType(), 0);
+			x == X_DIMENSION - 1 ? m_pBlocks[position(x, y, z)].setAdjBlockType(BLOCK_TYPE::Air, 3)
+								 : m_pBlocks[position(x, y, z)].setAdjBlockType(m_pBlocks[position(x + 1, y, z)].getBlockType(), 3);
+			y == Y_DIMENSION - 1 ? m_pBlocks[position(x, y, z)].setAdjBlockType(BLOCK_TYPE::Air, 5)
+								 : m_pBlocks[position(x, y, z)].setAdjBlockType(m_pBlocks[position(x, y + 1, z)].getBlockType(), 5);
+			z == Z_DIMENSION - 1 ? m_pBlocks[position(x, y, z)].setAdjBlockType(BLOCK_TYPE::Air, 1)
+								 : m_pBlocks[position(x, y, z)].setAdjBlockType(m_pBlocks[position(x, y, z + 1)].getBlockType(), 1);
+		}
+	}
+}
+*/

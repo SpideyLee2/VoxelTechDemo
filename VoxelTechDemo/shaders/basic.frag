@@ -21,16 +21,36 @@ void main() {
 	//vec3 finalColor = mix(depthColor, litColor, clamp(fs_in.fragCoords.y / 150, 0.5, 1.0));
 	//FragColor = vec4(finalColor, 1.0);
 
-	// Fog
 	vec3 color = texture(arrTex, fs_in.texCoords).rgb;
-	vec3 fogColor = vec3(0.4, 0.7, 0.8);
-	int fogStartDist = 200;
-	int fogFadeDist = 50;
+
+	// Face-based lighting 
+	// Ugly, but gets the job done for now. Will eventually transition to directional light
+	vec3 darkness = vec3(0.0, 0.0, 0.0);
+	if (fs_in.normal.x > 0) {
+		color = mix(color, darkness, 0.2);
+	}
+	else if (fs_in.normal.z > 0) {
+		color = mix(color, darkness, 0.15);
+	}
+	else if (fs_in.normal.x < 0) {
+		color = mix(color, darkness, 0.1);
+	}
+	else if (fs_in.normal.z < 0) {
+		color = mix(color, darkness, 0.15);
+	}
+	else if (fs_in.normal.y < 0) {
+		color = mix(color, darkness, 0.6);
+	}
+
+	// Fog
+	const vec3 FOG_COLOR = vec3(0.4, 0.7, 0.8);
+	const int FOG_START_DIST = 150;
+	const int FOG_FADE_DIST = 200;
 	float dist = distance(cameraPos, fs_in.fragPos);
-	if (dist > fogStartDist) {
-		color = mix(color, fogColor, clamp((dist - fogStartDist) / fogFadeDist, 0.0, 1.0));
+	if (dist > FOG_START_DIST) {
+		color = mix(color, FOG_COLOR, clamp((dist - FOG_START_DIST) / FOG_FADE_DIST, 0.0, 1.0));
 	}
 	
-	//FragColor = vec4(color, 1.0);
-	FragColor = vec4(fs_in.normal, 1.0);
+	FragColor = vec4(color, 1.0);
+	//FragColor = vec4(fs_in.normal, 1.0);
 }

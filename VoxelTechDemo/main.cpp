@@ -14,7 +14,6 @@
 #include "Shader.h"
 #include "Texture2D.h"
 #include "Camera.h"
-//#include "Chunk.h"
 #include "ChunkManager.h"
 
 #pragma region Function_Declarations
