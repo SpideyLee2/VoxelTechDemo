@@ -11,8 +11,7 @@
 //};
 
 enum class TEXTURE_TYPE {
-	Air = 0,
-	GrassTop,
+	GrassTop = 0,
 	GrassSide,
 	Dirt,
 	Stone,

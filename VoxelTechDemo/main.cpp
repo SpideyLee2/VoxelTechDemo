@@ -8,14 +8,16 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <future>
+#include <chrono>
 
 #include "Shader.h"
 #include "Texture2D.h"
 #include "Camera.h"
-#include "Chunk.h"
+#include "ChunkManager.h"
 
 #pragma region Function_Declarations
-void drawTerrain(Shader shader, unsigned int vao);
+//void loadChunks(std::vector<Chunk>& chunks, const int renderDistance);
 void processInput(GLFWwindow* window);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void mousePosCallback(GLFWwindow* window, double xPos, double yPos);
@@ -36,6 +38,8 @@ bool flashlightIsActive = false;
 
 const glm::mat4 IDENTITY{ 1.0f };
 
+const int TEX_ARR_UNIT = 1;
+
 glm::mat4 view;
 glm::mat4 projection;
 
@@ -50,10 +54,55 @@ GLfloat screenQuadVertices[] = {
 	-1.0,  1.0,		 0.0,  1.0
 };
 
-Camera camera{ glm::vec3(0.0f, 150.0f, 3.0f) };
+float cubeVertices[] = {
+	// Positions           // Normals      // Tex Coords
+	// Back face
+	-1.0f, -1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 0.0f, 0.0f, // bottom-left
+	 1.0f,  1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 1.0f, 1.0f, // top-right
+	 1.0f, -1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 1.0f, 0.0f, // bottom-right         
+	 1.0f,  1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 1.0f, 1.0f, // top-right
+	-1.0f, -1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 0.0f, 0.0f, // bottom-left
+	-1.0f,  1.0f, -1.0f,    0.0f,  0.0f,   -1.0f, 0.0f, 1.0f, // top-left
+	// Front face		  				  
+	-1.0f, -1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 0.0f, 0.0f, // bottom-left
+	 1.0f, -1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 1.0f, 0.0f, // bottom-right
+	 1.0f,  1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 1.0f, 1.0f, // top-right
+	 1.0f,  1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 1.0f, 1.0f, // top-right
+	-1.0f,  1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 0.0f, 1.0f, // top-left
+	-1.0f, -1.0f,  1.0f,    0.0f,  0.0f,    1.0f, 0.0f, 0.0f, // bottom-left
+	// Left face		  				  
+	-1.0f,  1.0f,  1.0f,   -1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-right
+	-1.0f,  1.0f, -1.0f,   -1.0f,  0.0f,    0.0f, 1.0f, 1.0f, // top-left
+	-1.0f, -1.0f, -1.0f,   -1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-left
+	-1.0f, -1.0f, -1.0f,   -1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-left
+	-1.0f, -1.0f,  1.0f,   -1.0f,  0.0f,    0.0f, 0.0f, 0.0f, // bottom-right
+	-1.0f,  1.0f,  1.0f,   -1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-right
+	// Right face		  				  
+	 1.0f,  1.0f,  1.0f,    1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-left
+	 1.0f, -1.0f, -1.0f,    1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-right
+	 1.0f,  1.0f, -1.0f,    1.0f,  0.0f,    0.0f, 1.0f, 1.0f, // top-right         
+	 1.0f, -1.0f, -1.0f,    1.0f,  0.0f,    0.0f, 0.0f, 1.0f, // bottom-right
+	 1.0f,  1.0f,  1.0f,    1.0f,  0.0f,    0.0f, 1.0f, 0.0f, // top-left
+	 1.0f, -1.0f,  1.0f,    1.0f,  0.0f,    0.0f, 0.0f, 0.0f, // bottom-left     
+	// Bottom face		  				  
+	-1.0f, -1.0f, -1.0f,    0.0f, -1.0f,    0.0f, 0.0f, 1.0f, // top-right
+	 1.0f, -1.0f, -1.0f,    0.0f, -1.0f,    0.0f, 1.0f, 1.0f, // top-left
+	 1.0f, -1.0f,  1.0f,    0.0f, -1.0f,    0.0f, 1.0f, 0.0f, // bottom-left
+	 1.0f, -1.0f,  1.0f,    0.0f, -1.0f,    0.0f, 1.0f, 0.0f, // bottom-left
+	-1.0f, -1.0f,  1.0f,    0.0f, -1.0f,    0.0f, 0.0f, 0.0f, // bottom-right
+	-1.0f, -1.0f, -1.0f,    0.0f, -1.0f,    0.0f, 0.0f, 1.0f, // top-right
+	// Top face			  				  
+	-1.0f,  1.0f, -1.0f,    0.0f,  1.0f,    0.0f, 0.0f, 1.0f, // top-left
+	 1.0f,  1.0f , 1.0f,    0.0f,  1.0f,    0.0f, 1.0f, 0.0f, // bottom-right
+	 1.0f,  1.0f, -1.0f,    0.0f,  1.0f,    0.0f, 1.0f, 1.0f, // top-right     
+	 1.0f,  1.0f,  1.0f,    0.0f,  1.0f,    0.0f, 1.0f, 0.0f, // bottom-right
+	-1.0f,  1.0f, -1.0f,    0.0f,  1.0f,    0.0f, 0.0f, 1.0f, // top-left
+	-1.0f,  1.0f,  1.0f,    0.0f,  1.0f,    0.0f, 0.0f, 0.0f  // bottom-left        
+};
+
+Camera camera{ glm::vec3(0.0f, 50.0f, 0.0f) };
 
 int main() {
-	std::cout << "Help me" << std::endl;
 	#pragma region GFLW_Window_Setup
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -88,12 +137,108 @@ int main() {
 
 	#pragma region Shaders
 	Shader basicShader{ "shaders/basic.vert", "shaders/basic.frag" };
+	Shader debugChunkShader{ "shaders/debug_chunk.vert", "shaders/debug_chunk.frag" };
+	#pragma endregion
+
+	#pragma region Textures
+	//Texture2D grassTopTex{ "textures/grass/Block_Grass_Top.png", true };
+	//Texture2D grassSideTex{ "textures/grass/Block_Grass_Side.png", true };
+	//Texture2D dirtTex{ "textures/dirt/Block_Dirt.png", true };
+	//Texture2D stoneTex{ "textures/stone/Block_Stone.png", true };
+	//Texture2D sandTex{ "textures/sand/Block_Sand.png", true };
+	//Texture2D waterTex{ "textures/water/Block_Water.png", true };
+	//Texture2D fullSpecular{ "textures/Full_Specular.png" };
+	//Texture2D noSpecular{ "textures/No_Specular.png" };
 	#pragma endregion
 
 	stbi_set_flip_vertically_on_load(true);
 
+	unsigned int cubeVAO;
+	glGenVertexArrays(1, &cubeVAO);
+	glBindVertexArray(cubeVAO);
+	
+	unsigned int cubeVBO;
+	glGenBuffers(1, &cubeVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), &cubeVertices, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 5));
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	const int NUM_TEXTURES = 6;
+	std::string texDirs[NUM_TEXTURES] = {
+		{ "textures/grass/Block_Grass_Top.png" },
+		{ "textures/grass/Block_Grass_Side.png" },
+		{ "textures/dirt/Block_Dirt.png" },
+		{ "textures/stone/Block_Stone.png" },
+		{ "textures/sand/Block_Sand.png" },
+		{ "textures/water/Block_Water.png" },
+		//{ "textures/Full_Specular.png", false },
+		//{ "textures/No_Specular.png", false }
+	};
+
+	// Constructs array texture
+	#pragma region Array_Texture
+	unsigned int arrTex;
+	glGenTextures(1, &arrTex);
+	glActiveTexture(GL_TEXTURE0 + TEX_ARR_UNIT);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, arrTex);
+
+	const int TEX_ARR_WIDTH = 16; // # pixels
+	const int TEX_ARR_HEIGHT = 16; // # pixels
+	const int TEX_ARR_DEPTH = 16; // # textures
+	const int TEX_ARR_WIDTH_BYTES = TEX_ARR_WIDTH * sizeof(unsigned char);
+	const int TEX_ARR_HEIGHT_BYTES = TEX_ARR_HEIGHT * sizeof(unsigned char);
+
+	int texWidth, texHeight, texNumChannels;
+	std::vector<unsigned char> pixelData = std::vector<unsigned char>();
+	// Populates the pixel data vector for creating a 2D array texture
+	for (int i = 0; i < NUM_TEXTURES; ++i) {
+		unsigned char* texData = stbi_load(texDirs[i].c_str(), &texWidth, &texHeight, &texNumChannels, 0);
+		if (texData) {
+			for (int channel = 0; channel < texNumChannels; ++channel) {
+				for (int y = 0; y < texHeight; ++y) {
+					for (int x = 0; x < texWidth; ++x) {
+						pixelData.emplace_back(std::move(texData[x + (y * TEX_ARR_WIDTH) + (channel * TEX_ARR_WIDTH * TEX_ARR_HEIGHT)]));
+					}
+				}
+			}
+			stbi_image_free(texData);
+		}
+		else {
+			std::cout << "Could not load texture data\n";
+		}
+	}
+
+	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, 16, 16, TEX_ARR_DEPTH,
+				 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+
+	glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	pixelData.clear();
+
+	glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+	glActiveTexture(GL_TEXTURE0);
+	#pragma endregion
+
 	float lastFrame = 0.0f;
 	float currFrame = 0.0f;
+	//glm::vec3 prevCameraPos = camera.m_Position;
+	//glm::vec3 currCameraPos;
+	//bool cameraHasMoved = false;
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -245,19 +390,7 @@ int main() {
 	}
 	*/
 
-	std::cout << "Generating chunk..." << std::endl;
-	// Uncomment these to render additional chunks (WARNING: Not optimized for this (yet)).
-	Chunk chunks[] = {
-		{glm::vec2{0.0f, 0.0f}},
-		//{glm::vec2{-16.0f, 0.0f}},
-		//{glm::vec2{0.0f, 16.0f}},
-		//{glm::vec2{0.0f, -16.0f}},
-		//{glm::vec2{16.0f, 16.0f}},
-		//{glm::vec2{-16.0f, -16.0f}},
-		//{glm::vec2{-16.0f, 16.0f}},
-		//{glm::vec2{16.0f, -16.0f}}
-	};
-	std::cout << "Finished generating chunk." << std::endl;
+	ChunkManager chunkManager{ camera.m_Position };
 
 	// NEW Render Loop
 	while (!glfwWindowShouldClose(window)) {
@@ -265,24 +398,39 @@ int main() {
 		deltaTime = currFrame - lastFrame;
 		lastFrame = currFrame;
 
+		//std::cout << "Camera Pos: (" << camera.m_Position.x << ", " << camera.m_Position.y << ", " << camera.m_Position.z << ")\n";
+
+		//currCameraPos = camera.m_Position;
+		//currCameraPos != prevCameraPos ? cameraHasMoved = true : cameraHasMoved = false;
+		//prevCameraPos = currCameraPos;
+
 		processInput(window);
 
 		glClearColor(0.2f, 0.5f, 0.7f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glm::mat4 view = camera.getViewMatrix();
-		glm::mat4 projection = glm::perspective(glm::radians(camera.fov), (float)screenWidth / (float)screenHeight, 0.1f, 2000.0f);
+		glm::mat4 projection = glm::perspective(glm::radians(camera.m_Fov), (float)screenWidth / (float)screenHeight, 0.1f, 2000.0f);
 
 		#pragma region Terrain_Drawing
+		glActiveTexture(GL_TEXTURE0 + TEX_ARR_UNIT);
+		glBindTexture(GL_TEXTURE_2D_ARRAY, arrTex);
 		// Shader Uniforms
 		glUniformMatrix4fv(glGetUniformLocation(basicShader.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(glGetUniformLocation(basicShader.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniformMatrix4fv(glGetUniformLocation(debugChunkShader.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(glGetUniformLocation(debugChunkShader.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniform1i(glGetUniformLocation(basicShader.id, "arrTex"), TEX_ARR_UNIT);
+		glUniform3fv(glGetUniformLocation(basicShader.id, "cameraPos"), 1, glm::value_ptr(camera.m_Position));
 		
 		//std::cout << "Rendering chunks..." << std::endl;
-		for (const Chunk& c : chunks) {
-			c.render(basicShader);
-		}
+		//for (Chunk& c : chunks) {
+		//	c.render(basicShader, currCameraPos, false);
+		//}
 		//std::cout << "Finished rendering chunks." << std::endl;
+		chunkManager.recalculate(camera.m_Position);
+		chunkManager.renderChunks(basicShader);
+		//chunkManager.renderChunkCenters(debugChunkShader, cubeVAO);
 		#pragma endregion
 
 		glfwSwapBuffers(window);
@@ -296,74 +444,8 @@ int main() {
 	return 0;
 }
 
-void drawTerrain(Shader shader, unsigned int vao, Texture2D diffuseMap, Texture2D specularMap) {
-	/*
-	shader.use();
-
-	diffuseMap.bind(0);
-	specularMap.bind(1);
-
-	#pragma region Shader_Uniforms
-	glUniformMatrix4fv(glGetUniformLocation(shader.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(shader.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-	glUniform3fv(glGetUniformLocation(shader.id, "viewPos"), 1, glm::value_ptr(camera.cameraPosition));
-
-	glUniform1i(glGetUniformLocation(shader.id, "material.diffuse"), 0);
-	glUniform1i(glGetUniformLocation(shader.id, "material.specular"), 1);
-	glUniform1f(glGetUniformLocation(shader.id, "material.shininess"), 8.0f);
-
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].direction"), 1, glm::value_ptr(sunPos));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].ambient"), 1, glm::value_ptr(glm::vec3(0.2f) * sunLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].diffuse"), 1, glm::value_ptr(glm::vec3(0.5f) * sunLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[0].specular"), 1, glm::value_ptr(glm::vec3(0.05f) * sunLightColor));
-
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].direction"), 1, glm::value_ptr(moonPos));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].ambient"), 1, glm::value_ptr(glm::vec3(0.2f) * moonLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].diffuse"), 1, glm::value_ptr(glm::vec3(1.0f) * moonLightColor));
-	glUniform3fv(glGetUniformLocation(shader.id, "dirLight[1].specular"), 1, glm::value_ptr(glm::vec3(0.03f) * moonLightColor));
-
-	for (int i = 0; i < 4; ++i) {
-		std::string index = std::to_string(i);
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].position").c_str()), 1,
-					 glm::value_ptr(lightPositions[i]));
-		glUniform1f(glGetUniformLocation(shader.id, ("pointLight[" + index + "].constant").c_str()), 1.0f);
-		glUniform1f(glGetUniformLocation(shader.id, ("pointLight[" + index + "].linear").c_str()), 0.14f);
-		glUniform1f(glGetUniformLocation(shader.id, ("pointLight[" + index + "].quadratic").c_str()), 0.07f);
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].ambient").c_str()), 1,
-					 glm::value_ptr(glm::vec3(0.03f)));
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].diffuse").c_str()), 1,
-					 glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
-		glUniform3fv(glGetUniformLocation(shader.id, ("pointLight[" + index + "].specular").c_str()), 1,
-					 glm::value_ptr(glm::vec3(0.05f)));
-	}
-
-	glUniform1i(glGetUniformLocation(shader.id, "spotLight.isActive"), flashlightIsActive);
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.position"), 1, glm::value_ptr(camera.cameraPosition));
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.direction"), 1, glm::value_ptr(camera.cameraFront));
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.innerCutoff"), glm::cos(glm::radians(12.5f)));
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.outerCutoff"), glm::cos(glm::radians(17.5f)));
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.constant"), 1.0f);
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.linear"), 0.07f);
-	glUniform1f(glGetUniformLocation(shader.id, "spotLight.quadratic"), 0.017f);
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.ambient"), 1, glm::value_ptr(glm::vec3(0.1f)));
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.diffuse"), 1, glm::value_ptr(glm::vec3(0.5f)));
-	glUniform3fv(glGetUniformLocation(shader.id, "spotLight.specular"), 1, glm::value_ptr(glm::vec3(0.05f)));
-	#pragma endregion
-
-	glBindVertexArray(vao);
-	//int noiseInd = 0;
-	//for (int i = 0; i < NUM_CUBES_X; ++i) {
-	//	for (int j = 0; j < NUM_CUBES_Z; ++j) {
-	//		glm::mat4 model = glm::mat4(1.0f);
-	//		model = glm::translate(model, glm::vec3(i, (int)(noiseData[noiseInd++] * 10), -j));
-	//		glUniformMatrix4fv(glGetUniformLocation(objShader.id, "model"), 1, GL_FALSE, glm::value_ptr(model));
-	//		glDrawArrays(GL_TRIANGLES, 0, 36);
-	//	}
-	//}
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 36, TOTAL_NUM_CUBES);
-	*/
-}
+std::vector<std::future<void>> futures;
+std::mutex chunksMutex;
 
 void processInput(GLFWwindow* window) {
 	// Close window
@@ -375,7 +457,7 @@ void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS) {
 		glfwSetWindowMonitor(window, glfwGetPrimaryMonitor(), 0, 0, 2160, 1440, 144);
 	}
-	// Fullscreen
+	// Windowed
 	if (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS) {
 		glfwSetWindowMonitor(window, NULL, 0, 0, 800, 600, 144);
 	}

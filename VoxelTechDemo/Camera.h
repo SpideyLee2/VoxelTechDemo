@@ -14,16 +14,16 @@ enum class CAMERA_MOVEMENT {
 
 class Camera {
 public:
-	glm::vec3 cameraPosition;
-	glm::vec3 cameraFront;
+	glm::vec3 m_Position;
+	glm::vec3 m_Front;
 
-	float yaw, pitch;
-	float mouseSensitivity, scrollSensitivity;
-	float speed, speedMultiplier;
+	float m_Yaw, m_Pitch;
+	float m_MouseSensitivity, m_ScrollSensitivity;
+	float m_Speed, m_SpeedMultiplier;
 
-	float fov;
-	float pitchConstraintHi, pitchConstraintLo;
-	float fovConstraintHi, fovConstraintLo;
+	float m_Fov;
+	float m_PitchConstraintHi, m_PitchConstraintLo;
+	float m_FovConstraintHi, m_FovConstraintLo;
 
 	Camera(glm::vec3 pos, glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -35,7 +35,7 @@ public:
 	glm::mat4 getViewMatrix();
 
 private:
-	glm::vec3 worldUp;
-	float tempSpeed;
+	glm::vec3 m_WorldUp;
+	float m_TempSpeed;
 	glm::mat4 myLookAt(glm::vec3 pos, glm::vec3 target, glm::vec3 up);
 };
