@@ -4,12 +4,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <FastNoiseLite/FastNoiseLite.h>
 
 #include <iostream>
-#include <unordered_map>
-#include <future>
-#include <chrono>
 
 #include "Shader.h"
 #include "Texture2D.h"
@@ -17,15 +13,22 @@
 #include "ChunkManager.h"
 
 #pragma region Function_Declarations
-//void loadChunks(std::vector<Chunk>& chunks, const int renderDistance);
 void processInput(GLFWwindow* window);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 void mousePosCallback(GLFWwindow* window, double xPos, double yPos);
 void scrollCallback(GLFWwindow* window, double xOffset, double yOffset);
+void createArrayTexture(unsigned int& arrTex);
+GLFWwindow* windowSetup();
+void genCubeVAOandVBO(unsigned int& cubeVAO, unsigned int& cubeVBO);
 #pragma endregion
 
+#pragma region Global_Variables
 int screenWidth = 800;
 int screenHeight = 600;
+
+int monitorResX = 1920;
+int monitorResY = 1080;
+
 const char* TITLE = "Voxel Tech Demo";
 
 double lastXPos = screenWidth / 2;
@@ -39,6 +42,7 @@ bool flashlightIsActive = false;
 const glm::mat4 IDENTITY{ 1.0f };
 
 const int TEX_ARR_UNIT = 1;
+const int REFRESH_RATE = 200;
 
 glm::mat4 view;
 glm::mat4 projection;
@@ -53,7 +57,6 @@ GLfloat screenQuadVertices[] = {
 	 1.0,  1.0,		 1.0,  1.0,
 	-1.0,  1.0,		 0.0,  1.0
 };
-
 float cubeVertices[] = {
 	// Positions           // Normals      // Tex Coords
 	// Back face
@@ -101,144 +104,28 @@ float cubeVertices[] = {
 };
 
 Camera camera{ glm::vec3(0.0f, 50.0f, 0.0f) };
+#pragma endregion
 
 int main() {
-	#pragma region GFLW_Window_Setup
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-	GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, TITLE, NULL, NULL);
-
-	if (!window) {
-		std::cout << "Failed to create window" << std::endl;
-		glfwTerminate();
-		return -1;
-	}
-
-	glfwMakeContextCurrent(window);
-
-	// GLFW callbacks
-	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
-	glfwSetCursorPosCallback(window, mousePosCallback);
-	glfwSetScrollCallback(window, scrollCallback);
-
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-		std::cout << "Failed to load GLAD" << std::endl;
-		glfwTerminate();
-		return -1;
-	}
-
-	glViewport(0, 0, screenWidth, screenHeight);
-	#pragma endregion
+	GLFWwindow* window = windowSetup();
 
 	#pragma region Shaders
 	Shader basicShader{ "shaders/basic.vert", "shaders/basic.frag" };
 	Shader debugChunkShader{ "shaders/debug_chunk.vert", "shaders/debug_chunk.frag" };
 	#pragma endregion
 
-	#pragma region Textures
-	//Texture2D grassTopTex{ "textures/grass/Block_Grass_Top.png", true };
-	//Texture2D grassSideTex{ "textures/grass/Block_Grass_Side.png", true };
-	//Texture2D dirtTex{ "textures/dirt/Block_Dirt.png", true };
-	//Texture2D stoneTex{ "textures/stone/Block_Stone.png", true };
-	//Texture2D sandTex{ "textures/sand/Block_Sand.png", true };
-	//Texture2D waterTex{ "textures/water/Block_Water.png", true };
-	//Texture2D fullSpecular{ "textures/Full_Specular.png" };
-	//Texture2D noSpecular{ "textures/No_Specular.png" };
-	#pragma endregion
-
 	stbi_set_flip_vertically_on_load(true);
 
 	unsigned int cubeVAO;
-	glGenVertexArrays(1, &cubeVAO);
-	glBindVertexArray(cubeVAO);
-	
 	unsigned int cubeVBO;
-	glGenBuffers(1, &cubeVBO);
-	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), &cubeVertices, GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)0);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 3));
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 5));
-
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-
-	const int NUM_TEXTURES = 6;
-	std::string texDirs[NUM_TEXTURES] = {
-		{ "textures/grass/Block_Grass_Top.png" },
-		{ "textures/grass/Block_Grass_Side.png" },
-		{ "textures/dirt/Block_Dirt.png" },
-		{ "textures/stone/Block_Stone.png" },
-		{ "textures/sand/Block_Sand.png" },
-		{ "textures/water/Block_Water.png" },
-		//{ "textures/Full_Specular.png", false },
-		//{ "textures/No_Specular.png", false }
-	};
+	genCubeVAOandVBO(cubeVAO, cubeVBO);
 
 	// Constructs array texture
-	#pragma region Array_Texture
 	unsigned int arrTex;
-	glGenTextures(1, &arrTex);
-	glActiveTexture(GL_TEXTURE0 + TEX_ARR_UNIT);
-	glBindTexture(GL_TEXTURE_2D_ARRAY, arrTex);
-
-	const int TEX_ARR_WIDTH = 16; // # pixels
-	const int TEX_ARR_HEIGHT = 16; // # pixels
-	const int TEX_ARR_DEPTH = 16; // # textures
-	const int TEX_ARR_WIDTH_BYTES = TEX_ARR_WIDTH * sizeof(unsigned char);
-	const int TEX_ARR_HEIGHT_BYTES = TEX_ARR_HEIGHT * sizeof(unsigned char);
-
-	int texWidth, texHeight, texNumChannels;
-	std::vector<unsigned char> pixelData = std::vector<unsigned char>();
-	// Populates the pixel data vector for creating a 2D array texture
-	for (int i = 0; i < NUM_TEXTURES; ++i) {
-		unsigned char* texData = stbi_load(texDirs[i].c_str(), &texWidth, &texHeight, &texNumChannels, 0);
-		if (texData) {
-			for (int channel = 0; channel < texNumChannels; ++channel) {
-				for (int y = 0; y < texHeight; ++y) {
-					for (int x = 0; x < texWidth; ++x) {
-						pixelData.emplace_back(std::move(texData[x + (y * TEX_ARR_WIDTH) + (channel * TEX_ARR_WIDTH * TEX_ARR_HEIGHT)]));
-					}
-				}
-			}
-			stbi_image_free(texData);
-		}
-		else {
-			std::cout << "Could not load texture data\n";
-		}
-	}
-
-	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, 16, 16, TEX_ARR_DEPTH,
-				 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
-
-	glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-
-	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	pixelData.clear();
-
-	glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-	glActiveTexture(GL_TEXTURE0);
-	#pragma endregion
+	createArrayTexture(arrTex);
 
 	float lastFrame = 0.0f;
 	float currFrame = 0.0f;
-	//glm::vec3 prevCameraPos = camera.m_Position;
-	//glm::vec3 currCameraPos;
-	//bool cameraHasMoved = false;
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -397,12 +284,8 @@ int main() {
 		currFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currFrame - lastFrame;
 		lastFrame = currFrame;
-
+		//std::cout << "Frame Rate: " << 1 / deltaTime << std::endl;
 		//std::cout << "Camera Pos: (" << camera.m_Position.x << ", " << camera.m_Position.y << ", " << camera.m_Position.z << ")\n";
-
-		//currCameraPos = camera.m_Position;
-		//currCameraPos != prevCameraPos ? cameraHasMoved = true : cameraHasMoved = false;
-		//prevCameraPos = currCameraPos;
 
 		processInput(window);
 
@@ -423,13 +306,10 @@ int main() {
 		glUniform1i(glGetUniformLocation(basicShader.id, "arrTex"), TEX_ARR_UNIT);
 		glUniform3fv(glGetUniformLocation(basicShader.id, "cameraPos"), 1, glm::value_ptr(camera.m_Position));
 		
-		//std::cout << "Rendering chunks..." << std::endl;
-		//for (Chunk& c : chunks) {
-		//	c.render(basicShader, currCameraPos, false);
-		//}
-		//std::cout << "Finished rendering chunks." << std::endl;
 		chunkManager.recalculate(camera.m_Position);
+		//std::cout << "Rendering chunks..." << std::endl;
 		chunkManager.renderChunks(basicShader);
+		//std::cout << "Finished rendering chunks." << std::endl;
 		//chunkManager.renderChunkCenters(debugChunkShader, cubeVAO);
 		#pragma endregion
 
@@ -455,11 +335,17 @@ void processInput(GLFWwindow* window) {
 
 	// Fullscreen
 	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS) {
-		glfwSetWindowMonitor(window, glfwGetPrimaryMonitor(), 0, 0, 2160, 1440, 144);
+		// Sets the window to display in fullscreen on the primary monitor
+		const GLFWvidmode* vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+		screenWidth = vidMode->width;
+		screenHeight = vidMode->height;
+		glfwSetWindowMonitor(window, NULL, 0, 0, screenWidth, screenHeight, REFRESH_RATE);
+		glViewport(0, 0, screenWidth, screenHeight);
 	}
 	// Windowed
 	if (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS) {
-		glfwSetWindowMonitor(window, NULL, 0, 0, 800, 600, 144);
+		glfwSetWindowMonitor(window, NULL, 50, 50, 800, 600, REFRESH_RATE);
+		glViewport(0, 0, 800, 600);
 	}
 
 	// Enable/Disable visible edge drawing
@@ -530,4 +416,117 @@ void mousePosCallback(GLFWwindow* window, double xPos, double yPos) {
 
 void scrollCallback(GLFWwindow* window, double xOffset, double yOffset) {
 	camera.processMouseScroll(static_cast<float>(yOffset));
+}
+
+void createArrayTexture(unsigned int& arrTex) {
+	const int NUM_TEXTURES = 6;
+	std::string texDirs[NUM_TEXTURES] = {
+		{ "textures/grass/Block_Grass_Top.png" },
+		{ "textures/grass/Block_Grass_Side.png" },
+		{ "textures/dirt/Block_Dirt.png" },
+		{ "textures/stone/Block_Stone.png" },
+		{ "textures/sand/Block_Sand.png" },
+		{ "textures/water/Block_Water.png" },
+		//{ "textures/Full_Specular.png", false },
+		//{ "textures/No_Specular.png", false }
+	};
+
+	glGenTextures(1, &arrTex);
+	glActiveTexture(GL_TEXTURE0 + TEX_ARR_UNIT);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, arrTex);
+
+	const int TEX_ARR_WIDTH = 16; // # pixels
+	const int TEX_ARR_HEIGHT = 16; // # pixels
+	const int TEX_ARR_DEPTH = 16; // # textures
+	const int TEX_ARR_WIDTH_BYTES = TEX_ARR_WIDTH * sizeof(unsigned char);
+	const int TEX_ARR_HEIGHT_BYTES = TEX_ARR_HEIGHT * sizeof(unsigned char);
+
+	int texWidth, texHeight, texNumChannels;
+	std::vector<unsigned char> pixelData = std::vector<unsigned char>();
+	// Populates the pixel data vector for creating a 2D array texture
+	for (int i = 0; i < NUM_TEXTURES; ++i) {
+		unsigned char* texData = stbi_load(texDirs[i].c_str(), &texWidth, &texHeight, &texNumChannels, 0);
+		if (texData) {
+			for (int channel = 0; channel < texNumChannels; ++channel) {
+				for (int y = 0; y < texHeight; ++y) {
+					for (int x = 0; x < texWidth; ++x) {
+						pixelData.emplace_back(std::move(texData[x + (y * TEX_ARR_WIDTH) + (channel * TEX_ARR_WIDTH * TEX_ARR_HEIGHT)]));
+					}
+				}
+			}
+			stbi_image_free(texData);
+		}
+		else {
+			std::cout << "Could not load texture data\n";
+		}
+	}
+
+	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA, 16, 16, TEX_ARR_DEPTH,
+				 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+
+	glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	pixelData.clear();
+
+	glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+	glActiveTexture(GL_TEXTURE0);
+}
+
+GLFWwindow* windowSetup() {
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+	GLFWwindow* window = glfwCreateWindow(screenWidth, screenHeight, TITLE, NULL, NULL);
+
+	if (!window) {
+		std::cout << "Failed to create window" << std::endl;
+		glfwTerminate();
+		exit(-1);
+	}
+
+	glfwMakeContextCurrent(window);
+
+	// GLFW callbacks
+	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+	glfwSetCursorPosCallback(window, mousePosCallback);
+	glfwSetScrollCallback(window, scrollCallback);
+
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+		std::cout << "Failed to load GLAD" << std::endl;
+		glfwTerminate();
+		exit(-1);
+	}
+
+	glViewport(0, 0, screenWidth, screenHeight);
+
+	return window;
+}
+
+void genCubeVAOandVBO(unsigned int& cubeVAO, unsigned int& cubeVBO) {
+	glGenVertexArrays(1, &cubeVAO);
+	glBindVertexArray(cubeVAO);
+
+	glGenBuffers(1, &cubeVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), &cubeVertices, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 5));
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 }
