@@ -9,6 +9,11 @@ Currently, I plan for the player to be capable of exploring a randomly generated
 * [Project Plans](#my-plans-for-this-project)
 * [Which Branch to View](#which-branch)
 * [How to View this Project](#how-to-view-this-project)
+  * [Controls](#controls)
+    * [Movement](#movement)
+    * [Window](#window)
+    * [Drawing](#drawing)
+    * [Other](#other)
 
 ---
 
@@ -35,3 +40,16 @@ If you want to view the code, the solution file for Visual Studio is in the base
 If you just want to see the project in action, go to the project directory (VoxelTechDemo/VoxelTechDemo/) and run the exectuable.
 
 __NOTE:__ I have not run my application on any OS other than Windows, so I don't know if it will port to Mac OS or Linux well, but it should, given the portability of GLFW. Just ensure your GPU supports OpenGL 3.3.
+
+### Controls
+
+#### *Movement*
+    W - Forward      S - Backward     A - Left     D - Right
+    SPACEBAR - Up     LEFT CONTROL - Down
+    LEFT SHIFT (HOLD) - Increase Speed
+#### *Window*
+    F11 - Native Fullscreen     F10 - Windowed (800x600)
+#### *Drawing*
+    BACKSLASH - Line (Wireframe)    LEFT SHIFT + BACKSLASH - Fill (Normal)
+#### *Other*
+    ESCAPE - Exit Program
